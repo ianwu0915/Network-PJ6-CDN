@@ -1,6 +1,10 @@
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import time
 import sys 
+import requests
+import gzip
+import argparse
+
 
 # origin server to for cdn 
 # http://cs5700cdnorigin.ccs.neu.edu:8080/. 
@@ -11,14 +15,19 @@ CACHE_SIZE = 20 * 1024 * 1024
 hostname = "localhost"
 port = 8080
 
+LFUcache = LFUCache(CACHE_SIZE)
+
 class cacheNode:
     def __init__(self, key, content):
         self.key = key
-        self.content = content
+        self.content = self.compress_content(content)
         self.freq = 1
         self.prev = None
         self.next = None
-        self.size = calculate_size(content)
+        self.size = self.calculate_size(content)
+    
+    def compress_content(self):
+        return gzip.compress(self.content.encode('utf-8'))
         
     def calculate_size(self, content):
         return sys.getsizeof(self.key.encode('utf-8')) + sys.getsizeof(self.content.encode('utf-8'))
@@ -108,33 +117,64 @@ class LFUCache:
         # O(n) operation
         
         self.min_freq = min(self.frequencyMap.keys())
-        
-        
-    
-class MyServer(BaseHTTPRequestHandler):
 
-    def __init__(self):
-        # A hash map to store the cache items and their metadata 
-        # key: path, value: (content, size, frequency)
-        self.LFUcache = LFUCache(CACHE_SIZE)
+class MyHTTPServer(HTTPServer):
+    def __init__(self, server_address, handler_class, origin):
+        self.origin = origin
+        super().__init__(server_address, handler_class)
+       
+class MyHandler(BaseHTTPRequestHandler):
 
-    def do_GET(self):
-        
-        if self.path in self.LFUcache.cache:
-            response_content = cache[self.path]
+    def do_GET(self):  
+        global LFUcache
+        if self.path in LFUcache.cache:
+            response_content = LFUcache.get(self.path).content
+            decompress_content = gzip.decompress(response_content).decode('utf-8')
         else:
             # fetch from origin server
-            response_content = fetch_from_origin_server(self.path)
-            cache[self.path] = response_content
-        
+            response_content = self.fetch_from_origin_server(self.path)
+            if not response_content:
+                self.send_response(404)
+                self.send_header("Content-type", "text/html")
+                self.end_headers()
+                self.wfile.write(b"404 Not Found")
+                return
+            else:
+                LFUcache.put(self.path, response_content)
         
         print("GET request received")
         self.send_response(200)
         self.send_header("Content-type", "text/html")
+        # self.send_header("Content-Encoding", "gzip")
         self.end_headers()
-        self.wfile.write(b"Hello World")
+        self.wfile.write(decompress_content.encode('utf-8'))
     
     
     def fetch_from_origin_server(self, path):
+        origin_url = f"{self.server.origin}{path}"
+    
         print("Fetching from origin server")
-        return "Hello World"
+        try: 
+            response = requests.get(origin_url)
+            response.raise_for_status()
+            content = response.content.decode('utf-8')
+            return content
+        except requests.exceptions.HTTPError as err:
+            print(f"Error: {err}")
+            return None 
+        
+def run(server_class=MyHTTPServer, handler_class=MyHandler, port=8080, origin =""):
+    server_address = ('', port)
+    httpd = server_class(server_address, handler_class, origin)
+    print(f'Starting httpd on port {port}...')
+    httpd.serve_forever()
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="HTTP CDN Server")
+    parser.add_argument('-p', '--port', type=int, help='Port number the HTTP server binds to', required=True)
+    parser.add_argument('-o', '--origin', type=str, help='Origin server URL for the CDN', required=True)
+
+    args = parser.parse_args()
+
+    run(port=args.port, origin=args.origin)
+                                    
