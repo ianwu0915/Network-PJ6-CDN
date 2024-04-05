@@ -15,22 +15,22 @@ CACHE_SIZE = 20 * 1024 * 1024
 hostname = "localhost"
 port = 8080
 
-LFUcache = LFUCache(CACHE_SIZE)
 
 class cacheNode:
     def __init__(self, key, content):
         self.key = key
+        self.size = self.calculate_size(content)
         self.content = self.compress_content(content)
         self.freq = 1
         self.prev = None
         self.next = None
-        self.size = self.calculate_size(content)
     
-    def compress_content(self):
-        return gzip.compress(self.content.encode('utf-8'))
+    
+    def compress_content(self, content):
+        return gzip.compress(content.encode('utf-8'))
         
     def calculate_size(self, content):
-        return sys.getsizeof(self.key.encode('utf-8')) + sys.getsizeof(self.content.encode('utf-8'))
+        return sys.getsizeof(self.key.encode('utf-8')) + sys.getsizeof(content)
 
 class LFUCache:
     def __init__(self, capacity):
@@ -57,10 +57,11 @@ class LFUCache:
             self.evict()
         
         self.cache[key] = node
-        if not self.frequencyMap[1]:
+        self.current_size += node.size
+        if 1 not in self.frequencyMap or not self.frequencyMap[1]:
             self.frequencyMap[1] = node 
         else:
-            node.next = frequencyMap[1]
+            node.next = self.frequencyMap[1]
             self.frequencyMap[1].prev = node
             self.frequencyMap[1] = node
         
@@ -86,7 +87,7 @@ class LFUCache:
         
         # update the frequency of the node
         node.freq += 1
-        if not self.frequencyMap[node.freq]:
+        if node.freq not in self.frequencyMap or not self.frequencyMap[node.freq]:
             self.frequencyMap[node.freq] = node
             node.prev = None
             node.next = None
@@ -118,6 +119,8 @@ class LFUCache:
         
         self.min_freq = min(self.frequencyMap.keys())
 
+LFUcache = LFUCache(CACHE_SIZE)
+
 class MyHTTPServer(HTTPServer):
     def __init__(self, server_address, handler_class, origin):
         self.origin = origin
@@ -128,8 +131,9 @@ class MyHandler(BaseHTTPRequestHandler):
     def do_GET(self):  
         global LFUcache
         if self.path in LFUcache.cache:
-            response_content = LFUcache.get(self.path).content
+            response_content = LFUcache.cache.get(self.path).content
             decompress_content = gzip.decompress(response_content).decode('utf-8')
+            print("Cache hit!!!!!")
         else:
             # fetch from origin server
             response_content = self.fetch_from_origin_server(self.path)
@@ -141,6 +145,8 @@ class MyHandler(BaseHTTPRequestHandler):
                 return
             else:
                 LFUcache.put(self.path, response_content)
+                decompress_content = response_content
+                print(LFUcache.current_size)
         
         print("GET request received")
         self.send_response(200)
@@ -148,6 +154,8 @@ class MyHandler(BaseHTTPRequestHandler):
         # self.send_header("Content-Encoding", "gzip")
         self.end_headers()
         self.wfile.write(decompress_content.encode('utf-8'))
+        print(LFUcache.current_size)
+        # print(gzip.decompress(LFUcache.frequencyMap[1].content).decode('utf-8'))
     
     
     def fetch_from_origin_server(self, path):
