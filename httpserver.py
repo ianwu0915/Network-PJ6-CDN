@@ -18,7 +18,7 @@ class cacheNode:
         self.freq = 1
         self.prev = None
         self.next = None
-        self.size = calculate_size(value)
+        self.size = calculate_size(content)
         
     def calculate_size(self, content):
         return sys.getsizeof(self.key.encode('utf-8')) + sys.getsizeof(self.content.encode('utf-8'))
@@ -28,7 +28,7 @@ class LFUCache:
         self.capacity = capacity
         self.cache = {} # map key to cache node 
         self.frequencyMap = {} # map frequency to the head of each frequency list
-        self.min_freq = 0
+        self.min_freq = None
         self.current_size = 0
         
     def get(self, key):
@@ -42,16 +42,18 @@ class LFUCache:
     def put(self, key, value):
         if key in self.cache:
             raise ValueError("Key already exists in cache")
-
-        while self.current_size + value.size > self.capacity:
-            self.evict()
         
         node = cacheNode(key, value)
+        while self.current_size + node.size > self.capacity:
+            self.evict()
+        
         self.cache[key] = node
         if not self.frequencyMap[1]:
-            frequencyMap[1] = node 
+            self.frequencyMap[1] = node 
         else:
-            self.add_to_frequency_list(node)
+            node.next = frequencyMap[1]
+            self.frequencyMap[1].prev = node
+            self.frequencyMap[1] = node
         
         self.min_freq = 1
         
@@ -94,7 +96,7 @@ class LFUCache:
         node = self.frequencyMap[self.min_freq]
         
         if not node.next:
-            self.frequencyMap[self.min_freq] = None
+            del self.frequencyMap[self.min_freq]
         
          # remove the least frequently used item from cache
         del self.cache[node.key]
@@ -102,13 +104,12 @@ class LFUCache:
         # update the size of the cache
         self.current_size -= node.size
         
-        # update the min_freq to the next frequency?
-        # not efficient, but it works
-        for key in sorted(self.frequencyMap.keys()):
-            if self.frequencyMap[key]:
-                self.min_freq = key
-                break
-    
+        # update the min_freq to the next frequency
+        # O(n) operation
+        
+        self.min_freq = min(self.frequencyMap.keys())
+        
+        
     
 class MyServer(BaseHTTPRequestHandler):
 
