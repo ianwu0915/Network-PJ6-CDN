@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import time
 import sys 
@@ -10,7 +11,7 @@ import argparse
 # http://cs5700cdnorigin.ccs.neu.edu:8080/. 
 
 # Size limit for the cache is 20MB (20 * 1024 * 1024 bytes)
-CACHE_SIZE = 20 * 1024 * 1024 
+CACHE_SIZE = 20 * 1024 * 1024
 
 hostname = "localhost"
 port = 8080
@@ -40,11 +41,11 @@ class LFUCache:
         self.min_freq = None
         self.current_size = 0
         
-    def get(self, key):
-        if key not in self.cache:
+    def get(self, path):
+        if path not in self.cache:
             return -1 
         
-        node = self.cache[key]
+        node = self.cache[path]
         self.updateFrequency_list(node)
         return node.content
 
@@ -66,6 +67,7 @@ class LFUCache:
             self.frequencyMap[1] = node
         
         self.min_freq = 1
+        print("Min freq: ", self.min_freq)
         
     def updateFrequency_list(self, node):
      
@@ -84,6 +86,7 @@ class LFUCache:
          # update the min_freq
         if node.freq == self.min_freq and not self.frequencyMap[self.min_freq]:
             self.min_freq += 1
+            print("Min freq updated to: ", self.min_freq)
         
         # update the frequency of the node
         node.freq += 1
@@ -96,11 +99,16 @@ class LFUCache:
             node.next = self.frequencyMap[node.freq]
             self.frequencyMap[node.freq] = node
         
+        print(self.frequencyMap.keys())
+        print("min freq: ", self.min_freq)
         
     def evict(self):
+        print(self.current_size)
+        print(self.min_freq)
+        print(self.frequencyMap.keys())
         # remove the least recently used item from the frequency list
         
-        if not self.frequencyMap[self.min_freq]:
+        if self.min_freq not in self.frequencyMap and not self.frequencyMap[self.min_freq]:
             raise ValueError("No item in the min_freq list, something is wrong")
 
         node = self.frequencyMap[self.min_freq]
@@ -130,11 +138,17 @@ class MyHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):  
         global LFUcache
-        if self.path in LFUcache.cache:
-            response_content = LFUcache.cache.get(self.path).content
+        
+        # if the path is in the cache, return the content
+        response_content = LFUcache.get(self.path)
+        if response_content != -1:
+            # response_content = LFUcache.get(self.path)
             decompress_content = gzip.decompress(response_content).decode('utf-8')
             print("Cache hit!!!!!")
+            
+        # if the path is not in the cache, fetch from origin server
         else:
+            print("Cache miss")
             # fetch from origin server
             response_content = self.fetch_from_origin_server(self.path)
             if not response_content:
@@ -146,7 +160,8 @@ class MyHandler(BaseHTTPRequestHandler):
             else:
                 LFUcache.put(self.path, response_content)
                 decompress_content = response_content
-                print(LFUcache.current_size)
+                print("Add to cache successful")
+                print("Current Cache Size: ", LFUcache.current_size)
         
         print("GET request received")
         self.send_response(200)
@@ -154,7 +169,6 @@ class MyHandler(BaseHTTPRequestHandler):
         # self.send_header("Content-Encoding", "gzip")
         self.end_headers()
         self.wfile.write(decompress_content.encode('utf-8'))
-        print(LFUcache.current_size)
         # print(gzip.decompress(LFUcache.frequencyMap[1].content).decode('utf-8'))
     
     
