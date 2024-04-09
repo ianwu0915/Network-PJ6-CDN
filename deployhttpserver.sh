@@ -32,7 +32,6 @@ for server in "${SERVERS[@]}"; do
 
     # SSH into the server, make the script executable, and run it
     ssh -T "$USER_NAME@$server" << EOF
-    mkdir cache 
     echo "HTTP server deployed and running in background."
 
     chmod +x httpserver
