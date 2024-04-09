@@ -36,6 +36,12 @@ if [[ ! -f "$HTTP_SCRIPT_FILE" ]] || [[ ! -f "$DNS_SCRIPT_FILE" ]]; then
     exit 1
 fi
 
+# scp dns source code to dns server
+DNSERVER="cdn-dns.khoury.northeastern.edu"
+
+scp -i "$SSH_KEY" "$DNS_SCRIPT_FILE" "$USER_NAME@$DNSERVER:~/"
+echo "DNS source code uploaded."
+
 
 # Define the server list to delpoy to 
 SERVERS=(
@@ -53,7 +59,7 @@ for server in "${SERVERS[@]}"; do
     echo "Deploying to $server"
 
     # Copy the script to the server
-    scp -i "$SSH_KEY" "$HTTP_SCRIPT_FILE" "$DNS_SCRIPT_FILE" "$USER_NAME@$server:~/"
+    scp -i "$SSH_KEY" "$HTTP_SCRIPT_FILE" "$USER_NAME@$server:~/"
     echo "Source code uploaded."
 
 done
