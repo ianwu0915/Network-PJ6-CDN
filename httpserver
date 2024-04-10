@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from socketserver import ThreadingMixIn
 import time
 import sys 
 import requests
@@ -125,7 +126,7 @@ class LFUCache:
         
 LFUcache = LFUCache(CACHE_SIZE)
 
-class MyHTTPServer(HTTPServer):
+class MyHTTPServer(ThreadingMixIn, HTTPServer):
     def __init__(self, server_address, handler_class, origin):
         self.origin = origin
         super().__init__(server_address, handler_class)
