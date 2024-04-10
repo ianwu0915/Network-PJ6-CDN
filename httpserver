@@ -8,7 +8,6 @@ import argparse
 import hashlib
 import os
 
-
 # origin server to for cdn 
 # http://cs5700cdnorigin.ccs.neu.edu:8080/. 
 
@@ -52,9 +51,12 @@ class LFUCache:
         file_size = sys.getsizeof(path) + sys.getsizeof(gzip.compress(content.encode('utf-8')))
         
         while self.cache and self.current_size + file_size > self.capacity:
+            print("#############################")
+            print("Cache is full, Evicting the least frequently used item")
             print("file size: ", file_size)
             print("Current size + file size: ", self.current_size + file_size)
             print("Cache size: ", self.capacity)
+            print("#############################")
             self.evict()
         
         self.cache[path] = self.get_safe_filename(path)
@@ -64,7 +66,9 @@ class LFUCache:
         file_size = os.path.getsize(f"./cache/{self.cache[path]}")
         
         self.current_size += file_size
+        print("#############################")
         print(f"Current Cache Size Used: {self.current_size / CACHE_SIZE * 100:.2f} %")
+        print("#############################")
         self.frequencyMap.append([path, 1])
         self.frequencyMap.sort(key=lambda x: x[1])
     
@@ -89,11 +93,12 @@ class LFUCache:
                 each[1] += 1
                 #sort the frequency list
                 self.frequencyMap.sort(key=lambda x: x[1])
+                print("#############################")
                 print("Frequency list updated")
                 print("FrequencyMap: ", self.frequencyMap)
+                print("#############################")
                     
     def evict(self):
-        print("Cache is full, Evicting the least frequently used item")
         print(f"Current Cache Size Used: {self.current_size / CACHE_SIZE * 100:.2f} %")
         
         # remove the least recently used item from the frequency list
@@ -134,11 +139,11 @@ class MyHandler(BaseHTTPRequestHandler):
         response_content = LFUcache.get(self.path)
         if response_content != -1:
             # response_content = LFUcache.get(self.path)
-            print("Cache hit!!!!!")
+            print("######## Cache Hit!!!! ########")
             
         # if the path is not in the cache, fetch from origin server
         else:
-            print("Cache miss!!!!")
+            print("######## Cache miss!!!! ########")
             # fetch from origin server
             response_content = self.fetch_from_origin_server(self.path)
             if not response_content:

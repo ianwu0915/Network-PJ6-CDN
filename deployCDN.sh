@@ -40,6 +40,12 @@ fi
 DNSERVER="cdn-dns.khoury.northeastern.edu"
 
 scp -i "$SSH_KEY" "$DNS_SCRIPT_FILE" "$USER_NAME@$DNSERVER:~/"
+ssh -i "$SSH_KEY" "$USER_NAME@$DNS_SERVER" << EOF
+pip install ip2geotools
+pip install dnslib
+pip install requests
+EOF
+
 echo "DNS source code uploaded."
 
 
