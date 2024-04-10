@@ -14,7 +14,7 @@ import shutil
 # http://cs5700cdnorigin.ccs.neu.edu:8080/. 
 
 # Size limit for the cache is 20MB (20 * 1024 * 1024 bytes)
-CACHE_SIZE = 20 * 1024 * 1024
+CACHE_SIZE = 500 * 1024
 
 hostname = "localhost"
 port = 8080
@@ -26,7 +26,7 @@ class LFUCache:
         self.hashed_origin_hostname = None
         
         self.cache = {} # map path to filename
-        self.frequencyMap = [] # keep an sorted array of [path, frequency]
+        self.frequencyMap = {} # keep an sorted array of [path, frequency]
         self.current_size = 0
     
     def get_safe_filename(self, path):
@@ -117,9 +117,8 @@ class LFUCache:
         print("#############################")
         print(f"Current Cache Size Used: {self.current_size / CACHE_SIZE * 100:.2f} %")
         print("#############################")
-        self.frequencyMap.append([file_path, 1])
+        self.frequencyMap[file_path] = 1
         self.write_frequency_Map_to_disk()
-        self.frequencyMap.sort(key=lambda x: x[1])
     
     # Write the cache content to the disk
     def write_to_disk(self, hashed_file_name, content):
@@ -140,7 +139,7 @@ class LFUCache:
         # open the file in write mode
         # overwrite the file if it exists
         with open(f"./cache/{self.hashed_origin_hostname}/frequencyMap.txt", "w") as f:
-            for path, freq in self.frequencyMap:
+            for path, freq in self.frequencyMap.items():
                 f.write(f"{path}-> {freq}\n")
     
     # read the frequency map from disk
@@ -150,7 +149,7 @@ class LFUCache:
                 for line in f:
                     path, frequency = line.split("->")
                     print("Path: ", path)
-                    self.frequencyMap.append([path, int(frequency)])
+                    self.frequencyMap[path] = int(frequency)
                 print("FrequencyMap: ", self.frequencyMap)
         except FileNotFoundError:
             print("File not found")
@@ -159,28 +158,38 @@ class LFUCache:
         # find the path in the frequency list
         print("#############################")
         print("Updating frequency list")
-        for each in self.frequencyMap:
-            if each[0] == key:
-                each[1] += 1
-                #sort the frequency list
-                self.frequencyMap.sort(key=lambda x: x[1])
-                print("#############################")
-                print("Frequency list updated")
-                print("FrequencyMap: ", self.frequencyMap)
-                print("#############################")
+        self.frequencyMap[key] += 1
+        
+        # for each in self.frequencyMap:
+        #     if each[0] == key:
+        #         each[1] += 1
+        #         #sort the frequency list
+        #         self.frequencyMap.sort(key=lambda x: x[1])
+        #         print("#############################")
+        #         print("Frequency list updated")
+        #         print("FrequencyMap: ", self.frequencyMap)
+        #         print("#############################")
         
         self.write_frequency_Map_to_disk()
                     
     def evict(self):
+        
+        if not self.frequencyMap:
+            print("Cache is empty, no items to evict.")
+            return
+        
         print(f"Current Cache Size Used: {self.current_size / CACHE_SIZE * 100:.2f} %")
         
-        # remove the least recently used item from the frequency list
-        for each in self.frequencyMap:
+        # remove the least Frequently used item from the sorted frequency hashmap
+        # and remove the file from the filesystem
+        
+        # sort the frequency key value pair by frequency
+        for path, freq in sorted(self.frequencyMap.items(), key = lambda x: x[1]):
             # check the frequency from the beginning and see if it's in the cache
-            if each[0] in self.cache:
+            if path in self.cache:
                 # remove the file from the filesystem
-                file_name = self.cache[each[0]]
-                file_path = f"./cache/{file_name}"
+                file_name = self.cache[path]
+                file_path = f"./cache/{self.hashed_origin_hostname}/{file_name}"
                 file_size = 0
                 try:
                     file_size = os.path.getsize(file_path)
@@ -192,7 +201,7 @@ class LFUCache:
                 self.current_size -= file_size
                 
                 # remove the item from the cache
-                del self.cache[each[0]]
+                del self.cache[path]
                 
                 break
         

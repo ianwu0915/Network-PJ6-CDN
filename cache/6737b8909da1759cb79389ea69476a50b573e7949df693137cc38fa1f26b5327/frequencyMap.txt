@@ -1,4 +1,4 @@
-http://cs5700cdnorigin.ccs.neu.edu:8080///Taylor_Swift-> 3
-http://cs5700cdnorigin.ccs.neu.edu:8080///Taylor_Swift-> 5
-http://cs5700cdnorigin.ccs.neu.edu:8080///Taylor_Swift-> 1
-http://cs5700cdnorigin.ccs.neu.edu:8080///Taylor_Swift-> 1
+http://cs5700cdnorigin.ccs.neu.edu:8080///Taylor_Swift-> 6
+http://cs5700cdnorigin.ccs.neu.edu:8080///Michael_Jackson-> 1
+http://cs5700cdnorigin.ccs.neu.edu:8080///The_Banshees_of_Inisherin-> 4
+http://cs5700cdnorigin.ccs.neu.edu:8080///Turkey-> 2
