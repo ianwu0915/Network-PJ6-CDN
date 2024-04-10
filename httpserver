@@ -8,12 +8,13 @@ import gzip
 import argparse
 import hashlib
 import os
+import shutil
 
 # origin server to for cdn 
 # http://cs5700cdnorigin.ccs.neu.edu:8080/. 
 
 # Size limit for the cache is 20MB (20 * 1024 * 1024 bytes)
-CACHE_SIZE = 1024 * 1024
+CACHE_SIZE = 20 * 1024 * 1024
 
 hostname = "localhost"
 port = 8080
@@ -21,6 +22,9 @@ port = 8080
 class LFUCache:
     def __init__(self, capacity):
         self.capacity = capacity
+        self.origin_hostname = None
+        self.hashed_origin_hostname = None
+        
         self.cache = {} # map path to filename
         self.frequencyMap = [] # keep an sorted array of [path, frequency]
         self.current_size = 0
@@ -29,12 +33,14 @@ class LFUCache:
         # Generate a filesystem-safe filename by hashing the key.
         return hashlib.sha256(path.encode()).hexdigest()
         
-    def get(self, path):
+    def get(self, origin, path):
+        self.checkIfOriginChanged(origin)
+        path = f"{self.origin_hostname}/{path}"
         if path not in self.cache:
             return -1 
         else:
             filename = self.cache[path]
-            cache_dir = "./cache"
+            cache_dir = f"./cache/{self.hashed_origin_hostname}"
             file_path = f"{cache_dir}/{filename}"
             try:
                 with open(file_path, 'rb') as f:
@@ -44,12 +50,49 @@ class LFUCache:
             except (FileNotFoundError, OSError) as e:
                 print(f"Error reading file {filename}: {e}")
                 return -1
+    
+    # check if the origin hostname changed
+    # if it changed, delete the previous origin directory in the cache
+    # and create a new origin directory
+    # Set the current origin hostname to the new origin hostname
+    def checkIfOriginChanged(self, origin):
+        print("Checking if origin changed")
+        print("Current Origin Hostname: ", origin)
+        if self.origin_hostname == origin:
+            print("Origin hostname has not changed")
+            return 
+        
+        self.origin_hostname = origin
+        self.hashed_origin_hostname = self.get_safe_filename(origin)
+        
+        print("Current Origin Hostname: ", self.origin_hostname)
 
+        # Check if the origin hostname changed
+        # By checking if the current origin directory folder is in the ./cache directory
+        if not os.path.exists(f"./cache/{self.hashed_origin_hostname}"):
+            # Delete other origin directories in the disk to save space
+            # by deleting the previous origin directory in the cache directory
+            for dir_name in os.listdir("./cache"):
+                dir_path = os.path.join("./cache", dir_name)
+                shutil.rmtree(dir_path)
+            
+            # create the current origin directory
+            print("Creating new origin directory")
+            os.makedirs(f"./cache/{self.hashed_origin_hostname}", exist_ok=True)
+        
+        else:
+            # Read the frequency map from disk
+            print("Reading frequency map from disk")
+            self.read_frequency_Map_from_disk()
+             
     def put(self, path, content):
-        if path in self.cache:
+        
+        file_path = f"{self.origin_hostname}/{path}"
+        
+        if file_path in self.cache:
             raise ValueError("Key already exists in cache")
         
-        file_size = sys.getsizeof(path) + sys.getsizeof(gzip.compress(content.encode('utf-8')))
+        file_size = sys.getsizeof(file_path) + sys.getsizeof(gzip.compress(content.encode('utf-8')))
         
         while self.cache and self.current_size + file_size > self.capacity:
             print("#############################")
@@ -60,23 +103,29 @@ class LFUCache:
             print("#############################")
             self.evict()
         
-        self.cache[path] = self.get_safe_filename(path)
-        self.write_to_file(path, content)
+        # [path: hashed_filename]
+        hashed_file_name = self.get_safe_filename(path)
+        
+        self.cache[file_path] = hashed_file_name
+        print("Add to cache: ", file_path, hashed_file_name)
+        print("Cache: ", self.cache)
+        self.write_to_disk(hashed_file_name, content)
         
         # update the current size with real file size
-        file_size = os.path.getsize(f"./cache/{self.cache[path]}")
-        
+        file_size = os.path.getsize(f"./cache/{self.hashed_origin_hostname}/{self.cache[file_path]}")
         self.current_size += file_size
         print("#############################")
         print(f"Current Cache Size Used: {self.current_size / CACHE_SIZE * 100:.2f} %")
         print("#############################")
-        self.frequencyMap.append([path, 1])
+        self.frequencyMap.append([file_path, 1])
+        self.write_frequency_Map_to_disk()
         self.frequencyMap.sort(key=lambda x: x[1])
     
-    def write_to_file(self, path, content):
-        file_name = self.get_safe_filename(path)
-        cache_dir = "./cache"
-        file_path = f"{cache_dir}/{file_name}"
+    # Write the cache content to the disk
+    def write_to_disk(self, hashed_file_name, content):
+        
+        cache_dir = f"./cache/{self.hashed_origin_hostname}"
+        file_path = f"{cache_dir}/{hashed_file_name}"
         
         try:
             os.makedirs(cache_dir, exist_ok=True)  # Ensure the cache directory exists
@@ -86,9 +135,30 @@ class LFUCache:
         except OSError as e:
             print(f"Failed to write file {file_path}: {e}")
     
-          
+    # Overwrite and Update the frequency map to disk
+    def write_frequency_Map_to_disk(self):
+        # open the file in write mode
+        # overwrite the file if it exists
+        with open(f"./cache/{self.hashed_origin_hostname}/frequencyMap.txt", "w") as f:
+            for path, freq in self.frequencyMap:
+                f.write(f"{path}-> {freq}\n")
+    
+    # read the frequency map from disk
+    def read_frequency_Map_from_disk(self):
+        try:
+            with open(f"./cache/{self.hashed_origin_hostname}/frequencyMap.txt", "r") as f:
+                for line in f:
+                    path, frequency = line.split("->")
+                    print("Path: ", path)
+                    self.frequencyMap.append([path, int(frequency)])
+                print("FrequencyMap: ", self.frequencyMap)
+        except FileNotFoundError:
+            print("File not found")
+    
     def updateFrequency_list(self, key):
         # find the path in the frequency list
+        print("#############################")
+        print("Updating frequency list")
         for each in self.frequencyMap:
             if each[0] == key:
                 each[1] += 1
@@ -98,6 +168,8 @@ class LFUCache:
                 print("Frequency list updated")
                 print("FrequencyMap: ", self.frequencyMap)
                 print("#############################")
+        
+        self.write_frequency_Map_to_disk()
                     
     def evict(self):
         print(f"Current Cache Size Used: {self.current_size / CACHE_SIZE * 100:.2f} %")
@@ -137,7 +209,7 @@ class MyHandler(BaseHTTPRequestHandler):
         global LFUcache
         print("Requesting for: ", self.path)
         # if the path is in the cache, return the content
-        response_content = LFUcache.get(self.path)
+        response_content = LFUcache.get(self.server.origin,self.path)
         if response_content != -1:
             # response_content = LFUcache.get(self.path)
             print("######## Cache Hit!!!! ########")
@@ -145,7 +217,7 @@ class MyHandler(BaseHTTPRequestHandler):
         # if the path is not in the cache, fetch from origin server
         else:
             print("######## Cache miss!!!! ########")
-            # fetch from origin server
+            # fetch from origin server 
             response_content = self.fetch_from_origin_server(self.path)
             if not response_content:
                 self.send_response(404)
@@ -171,7 +243,11 @@ class MyHandler(BaseHTTPRequestHandler):
         try: 
             response = requests.get(origin_url)
             response.raise_for_status()
-            content = response.content.decode('utf-8')
+            if 'gzip' in response.headers.get('Content-Encoding', ''):
+                content = gzip.decompress(response.content).decode('utf-8')
+            else:
+                content = response.content.decode('utf-8')
+                
             return content
         except requests.exceptions.HTTPError as err:
             print(f"Error: {err}")
