@@ -2,54 +2,162 @@
 import argparse
 import socket
 import sys
+import json
+import requests
+from urllib.parse import urlparse
 from dnslib import DNSRecord, DNSHeader, RR, A
-import ip2geotools.databases.noncommercial as ip
+import ip2geotools.databases.noncommercial as ip_db
+from ip2geotools.errors import LimitExceededError
+
+IP2LOCATION_API_URL = (
+    "https://api.ip2location.io/?key=2F77EA52BF5A243428D1D33C03AEAA57&ip={}&format=json"
+)
+IP_API_URL = "http://ip-api.com/json/{}"
+locations = """[
+    {
+        "ip_address": "45.33.55.171",
+        "city": "Fremont",
+        "region": "California",
+        "country": "US",
+        "latitude": 37.5482697,
+        "longitude": -121.988571
+    },
+    {
+        "ip_address": "170.187.142.220",
+        "city": "Atlanta",
+        "region": "Georgia",
+        "country": "US",
+        "latitude": 33.7489924,
+        "longitude": -84.3902644
+    },
+    {
+        "ip_address": "213.168.249.157",
+        "city": "London",
+        "region": "England",
+        "country": "GB",
+        "latitude": 51.4893335,
+        "longitude": -0.14405508452768728
+    },
+    {
+        "ip_address": "139.162.82.207",
+        "city": "Shibuya",
+        "region": "Tokyo",
+        "country": "JP",
+        "latitude": 35.6645956,
+        "longitude": 139.6987107
+    },
+    {
+        "ip_address": "45.79.124.209",
+        "city": "Mumbai",
+        "region": "Maharashtra",
+        "country": "IN",
+        "latitude": 19.0785451,
+        "longitude": 72.878176
+    },
+    {
+        "ip_address": "192.53.123.145",
+        "city": "Toronto",
+        "region": "Ontario",
+        "country": "CA",
+        "latitude": 43.6534817,
+        "longitude": -79.3839347
+    },
+    {
+        "ip_address": "192.46.221.203",
+        "city": "Sydney",
+        "region": "New South Wales",
+        "country": "AU",
+        "latitude": -33.8698439,
+        "longitude": 151.2082848
+    }
+  ]
+"""
+
+
+class Location:
+    def __init__(self, ip, latitude, longitude):
+        self.ip_address = ip
+        self.latitude = latitude
+        self.longitude = longitude
 
 
 class Dns_server:
     def __init__(self, port, name):
+        self.cache = {}
         self.index = 0
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.socket.bind(("", port))
         if not name.endswith("."):
             name += "."
         self.name = name
-        self.location = [
-            "45.33.55.171",
-            "170.187.142.220",
-            "213.168.249.157",
-            "139.162.82.207",
-            "45.79.124.209",
-            "192.53.123.145",
-            "192.46.221.203",
-        ]
-        self.city = []
-        for each in self.location:
-            x = ip.DbIpCity.get(each)
-            print(x)
-            self.city.append(x)
+        self.servers = []
+        value = json.loads(locations)
+
+        for entry in value:
+            x = Location(
+                entry["ip_address"],
+                entry["latitude"],
+                entry["longitude"],
+            )
+            self.servers.append(x)
+
+    def get_location_from_ip(self, ip):
+        try:
+            response = requests.get(IP2LOCATION_API_URL.format(ip))
+            if response.status_code == 200:
+                data = response.json()
+                latitude = None
+                longitude = None
+                for key, value in data.items():
+                    if key.startswith("lat"):
+                        latitude = value
+                    elif key.startswith("lon"):
+                        longitude = value
+                    if latitude and longitude:
+                        break
+                return Location(
+                    ip,
+                    latitude,
+                    longitude=longitude,
+                )
+            else:
+                sys.stderr.write(
+                    f"Failed to retrieve location for IP {ip}. Status code: {response.status_code}\n"
+                )
+                return None
+        except Exception as e:
+            sys.stderr.write(
+                f"An error occurred while fetching location for IP {ip}: {e}\n"
+            )
+            return None
 
     def get_closest_location(self, client_ip):
         try:
-            client_location = ip.DbIpCity.get(client_ip)
-        except Exception as e:
-            sys.stderr.write(f"An error occured {e}\n")
+            client_location = self.get_location_from_ip(client_ip)
+        except LimitExceededError:
+            sys.stderr.write(f"No more try to look up the location {client_ip}\n")
             return None
+        if client_location is None:
+            return None
+        print(f"The location is {client_location.latitude}")
+        if client_location is not None:
+            min_distance = float("inf")
+            closest_location = None
+            for server in self.servers:
+                distance_lat = abs(client_location.latitude - server.latitude)
+                distance_lon = abs(client_location.longitude - server.longitude)
+                distance = distance_lat + distance_lon  # Sum of absolute differences
+                if distance < min_distance:
+                    min_distance = distance
+                    closest_location = server
+            self.cache[client_ip] = closest_location.ip_address
+            return closest_location
 
-        min_distance = float("inf")
-        closest_location = None
-        for i in range(len(self.city)):
-            server_location = self.city[i]
-            distance_lat = abs(client_location.latitude - server_location.latitude)
-            distance_lon = abs(client_location.longitude - server_location.longitude)
-            distance = distance_lat + distance_lon  # Sum of absolute differences
-            if distance < min_distance:
-                min_distance = distance
-                closest_location = server_location
-        return closest_location
+        sys.stderr.write(f"Failed to retrieve client location for IP {client_ip}\n")
+        return None
 
     def check_index_range(self):
-        if self.index >= len(self.city):
+        if self.index >= len(self.servers):
             self.index = 0
         if self.index < 0:
             self.index = 0
@@ -71,7 +179,7 @@ class Dns_server:
                 closest = self.get_closest_location(addr[0])
                 if not closest:
                     self.check_index_range()
-                    closest = self.city[self.index]
+                    closest = self.servers[self.index]
                     self.index += 1
                 response = DNSRecord(
                     DNSHeader(id=request.header.id, qr=1, aa=1, ra=1), q=request.q

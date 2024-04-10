@@ -1,5 +1,8 @@
 pip install ip2geotools
 pip install dnslib
+pip install requests
+pip install psutil
+scp -i ssh-ed25519-chen.han1.priv dnsserver chen.han1@cdn-dns.khoury.northeastern.edu:~
 ssh -i ssh-ed25519-chen.han1.priv chen.han1@cdn-dns.khoury.northeastern.edu
 username: chen.han1
 port range: 20210-20219
