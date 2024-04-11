@@ -14,7 +14,7 @@ import shutil
 # http://cs5700cdnorigin.ccs.neu.edu:8080/. 
 
 # Size limit for the cache is 20MB (20 * 1024 * 1024 bytes)
-CACHE_SIZE = 500 * 1024
+CACHE_SIZE = 20 * 1024 * 1024
 
 hostname = "localhost"
 port = 8080
@@ -33,8 +33,7 @@ class LFUCache:
         # Generate a filesystem-safe filename by hashing the key.
         return hashlib.sha256(path.encode()).hexdigest()
         
-    def get(self, origin, path):
-        self.checkIfOriginChanged(origin)
+    def get(self, path):
         path = f"{self.origin_hostname}/{path}"
         if path not in self.cache:
             return -1 
@@ -58,17 +57,15 @@ class LFUCache:
     def checkIfOriginChanged(self, origin):
         print("Checking if origin changed")
         print("Current Origin Hostname: ", origin)
-        if self.origin_hostname == origin:
-            print("Origin hostname has not changed")
-            return 
+        # if self.origin_hostname == origin:
+        #     print("Origin hostname has not changed")
+        #     return 
         
         self.origin_hostname = origin
         self.hashed_origin_hostname = self.get_safe_filename(origin)
-        
-        print("Current Origin Hostname: ", self.origin_hostname)
 
-        # Check if the origin hostname changed
-        # By checking if the current origin directory folder is in the ./cache directory
+        # Check if the origin hostname changed by
+        # checking if the current origin directory folder is in the ./cache directory
         if not os.path.exists(f"./cache/{self.hashed_origin_hostname}"):
             # Delete other origin directories in the disk to save space
             # by deleting the previous origin directory in the cache directory
@@ -79,7 +76,9 @@ class LFUCache:
             # create the current origin directory
             print("Creating new origin directory")
             os.makedirs(f"./cache/{self.hashed_origin_hostname}", exist_ok=True)
-        
+
+        # Previous cache file exists
+        # Retrieve the frequency map and current size from disk 
         else:
             # Read the frequency map from disk
             print("Reading frequency map from disk")
@@ -88,7 +87,6 @@ class LFUCache:
     def put(self, path, content):
         
         file_path = f"{self.origin_hostname}/{path}"
-        
         if file_path in self.cache:
             raise ValueError("Key already exists in cache")
         
@@ -139,6 +137,8 @@ class LFUCache:
         # open the file in write mode
         # overwrite the file if it exists
         with open(f"./cache/{self.hashed_origin_hostname}/frequencyMap.txt", "w") as f:
+            # write the current size of the cache
+            f.write("current size: " + str(self.current_size) + "\n")
             for path, freq in self.frequencyMap.items():
                 f.write(f"{path}-> {freq}\n")
     
@@ -147,6 +147,10 @@ class LFUCache:
         try:
             with open(f"./cache/{self.hashed_origin_hostname}/frequencyMap.txt", "r") as f:
                 for line in f:
+                    if "current size" in line:
+                        self.current_size = int(line.split(":")[1])
+                        print("#### Current size: ", self.current_size)
+                        continue
                     path, frequency = line.split("->")
                     print("Path: ", path)
                     self.frequencyMap[path] = int(frequency)
@@ -218,7 +222,9 @@ class MyHandler(BaseHTTPRequestHandler):
         global LFUcache
         print("Requesting for: ", self.path)
         # if the path is in the cache, return the content
-        response_content = LFUcache.get(self.server.origin,self.path)
+        
+        LFUcache.checkIfOriginChanged(self.server.origin)
+        response_content = LFUcache.get(self.path)
         if response_content != -1:
             # response_content = LFUcache.get(self.path)
             print("######## Cache Hit!!!! ########")
