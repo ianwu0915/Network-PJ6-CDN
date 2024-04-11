@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 import argparse
+import gzip
+import os
 import socket
 import sys
 import json
 import requests
-from urllib.parse import urlparse
+import atexit
 from dnslib import DNSRecord, DNSHeader, RR, A
-import ip2geotools.databases.noncommercial as ip_db
 from ip2geotools.errors import LimitExceededError
+import threading
 
 IP2LOCATION_API_URL = (
     "https://api.ip2location.io/?key=2F77EA52BF5A243428D1D33C03AEAA57&ip={}&format=json"
@@ -75,15 +77,18 @@ locations = """[
 
 
 class Location:
-    def __init__(self, ip, latitude, longitude):
+    def __init__(self, ip, latitude, longitude, load=0):
         self.ip_address = ip
         self.latitude = latitude
         self.longitude = longitude
+        self.load = load
 
 
 class Dns_server:
     def __init__(self, port, name):
         self.cache = {}
+        atexit.register(self.write_to_file)
+        self.cache_file = "dns_cache"
         self.index = 0
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.socket.bind(("", port))
@@ -101,6 +106,17 @@ class Dns_server:
             )
             self.servers.append(x)
 
+    def write_to_file(self):
+        with gzip.open(self.cache_file, "wt") as f:
+            json.dump(self.cache, f)
+
+    def load_cache(self):
+        if os.path.exists(self.cache_file):
+            with gzip.open(self.cache_file, "rt") as f:
+                self.cache = json.load(f)
+        else:
+            self.cache = {}
+
     def get_location_from_ip(self, ip):
         try:
             response = requests.get(IP2LOCATION_API_URL.format(ip))
@@ -115,11 +131,8 @@ class Dns_server:
                         longitude = value
                     if latitude and longitude:
                         break
-                return Location(
-                    ip,
-                    latitude,
-                    longitude=longitude,
-                )
+                self.cache[ip] = (latitude, longitude)
+                return (latitude, longitude)
             else:
                 sys.stderr.write(
                     f"Failed to retrieve location for IP {ip}. Status code: {response.status_code}\n"
@@ -132,26 +145,28 @@ class Dns_server:
             return None
 
     def get_closest_location(self, client_ip):
-        try:
-            client_location = self.get_location_from_ip(client_ip)
-        except LimitExceededError:
-            sys.stderr.write(f"No more try to look up the location {client_ip}\n")
-            return None
+        temp = []
+        if client_ip in self.cache:
+            client_location = self.cache.get(client_ip)
+        else:
+            try:
+                client_location = self.get_location_from_ip(client_ip)
+            except LimitExceededError:
+                sys.stderr.write(f"No more try to look up the location {client_ip}\n")
+                return None
         if client_location is None:
             return None
-        print(f"The location is {client_location.latitude}")
-        if client_location is not None:
-            min_distance = float("inf")
-            closest_location = None
-            for server in self.servers:
-                distance_lat = abs(client_location.latitude - server.latitude)
-                distance_lon = abs(client_location.longitude - server.longitude)
-                distance = distance_lat + distance_lon  # Sum of absolute differences
-                if distance < min_distance:
-                    min_distance = distance
-                    closest_location = server
-            self.cache[client_ip] = closest_location.ip_address
-            return closest_location
+        for i in range(len(self.servers)):
+            distance_lat = abs(client_location[0] - self.servers[i].latitude)
+            distance_lon = abs(client_location[0] - self.servers[i].longitude)
+            distance = distance_lat + distance_lon  # Sum of absolute differences
+            new_entry = (distance, i)
+            temp.append(new_entry)
+        temp = sorted(temp, key=lambda x: x[0])
+        print(temp)
+        for each in temp:
+            if self.servers[each[1]].load <= 0.8:
+                return self.servers[each[1]]
 
         sys.stderr.write(f"Failed to retrieve client location for IP {client_ip}\n")
         return None
@@ -162,30 +177,32 @@ class Dns_server:
         if self.index < 0:
             self.index = 0
 
+    def handle_request(self, data, addr):
+        request = DNSRecord.parse(data)
+        qname = str(request.q.qname)
+        qtype = request.q.qtype
+        print(f"Qname: {qname}\nGet request: {request}")
+        if (
+            qname == self.name and qtype == 1
+        ):  # Check if it's an A query for the specified name
+            print("Trying to get the closest location!")
+            closest = self.get_closest_location(addr[0])
+            if not closest:
+                self.check_index_range()
+                closest = self.servers[self.index]
+                self.index += 1
+            response = DNSRecord(
+                DNSHeader(id=request.header.id, qr=1, aa=1, ra=1), q=request.q
+            )
+            response.add_answer(RR(qname, rdata=A(closest.ip_address)))
+            self.socket.sendto(response.pack(), addr)
+
     def run(self):
         print("DNS Server is running...")
         print(f"The self.name is {self.name}")
         while True:
             data, addr = self.socket.recvfrom(1024)
-            print(addr)
-            request = DNSRecord.parse(data)
-            qname = str(request.q.qname)
-            qtype = request.q.qtype
-            print(f"Qname: {qname}\nGet request: {request}")
-            if (
-                qname == self.name and qtype == 1
-            ):  # Check if it's an A query for the specified name
-                print("Trying to get the closet location!")
-                closest = self.get_closest_location(addr[0])
-                if not closest:
-                    self.check_index_range()
-                    closest = self.servers[self.index]
-                    self.index += 1
-                response = DNSRecord(
-                    DNSHeader(id=request.header.id, qr=1, aa=1, ra=1), q=request.q
-                )
-                response.add_answer(RR(qname, rdata=A(closest.ip_address)))
-                self.socket.sendto(response.pack(), addr)
+            threading.Thread(target=self.handle_request, args=(data, addr)).start()
 
 
 def main():
