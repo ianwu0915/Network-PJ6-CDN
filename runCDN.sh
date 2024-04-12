@@ -39,7 +39,7 @@ fi
 
 # Start running DNS server 
 echo "Start Running DNS Server on $DNS_SERVER"
-ssh -i "$SSH_KEY" "$USER_NAME@$DNS_SERVER" << EOF
+ssh -T -i "$SSH_KEY" "$USER_NAME@$DNS_SERVER" > /dev/null << EOF
 chmod +x $DNS_SCRIPT_FILE
 nohup ./dnsserver -p $PORT -n $NAME >dnsserver.log 2>&1 &
 echo "DNS server start running."
@@ -60,7 +60,7 @@ SERVERS=(
 for server in "${SERVERS[@]}"; do
 
     # SSH into the server, make the script executable, and run it
-    ssh -T "$USER_NAME@$server" << EOF
+    ssh -T -i "$SSH_KEY" "$USER_NAME@$server" > /dev/null << EOF
 
     chmod +x $HTTP_SCRIPT_FILE
     echo "Start Running http Server on $server"
@@ -69,4 +69,4 @@ for server in "${SERVERS[@]}"; do
 EOF
 done
 
-echo "Deployment completed."
+echo "CDN start running"

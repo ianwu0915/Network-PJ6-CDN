@@ -31,7 +31,7 @@ fi
 
 # Start running DNS server 
 echo "Start Running DNS Server on $DNS_SERVER"
-ssh -i "$SSH_KEY" "$USER_NAME@$DNS_SERVER" << EOF
+ssh -i "$SSH_KEY" "$USER_NAME@$DNS_SERVER" > /dev/null << EOF
 lsof -ti:$PORT | xargs -r kill
 
 echo "DNS server stop running."
@@ -52,7 +52,7 @@ SERVERS=(
 for server in "${SERVERS[@]}"; do
 
     # SSH into the server, make the script executable, and run it
-    ssh -T "$USER_NAME@$server" << EOF
+    ssh -T -i "$SSH_KEY" "$USER_NAME@$server" > /dev/null << EOF
     lsof -ti:$PORT | xargs -r kill
 EOF
 done

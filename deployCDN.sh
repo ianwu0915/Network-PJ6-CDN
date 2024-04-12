@@ -40,10 +40,10 @@ fi
 DNS_SERVER="cdn-dns.khoury.northeastern.edu"
 
 scp -i "$SSH_KEY" "$DNS_SCRIPT_FILE" "$USER_NAME@$DNS_SERVER:~/"
-ssh -T -i "$SSH_KEY" "$USER_NAME@$DNS_SERVER" << EOF
-pip install ip2geotools
-pip install dnslib
-pip install requests
+ssh -T -i "$SSH_KEY" "$USER_NAME@$DNS_SERVER" > /dev/null << EOF 
+pip install ip2geotools > /dev/null
+pip install dnslib > /dev/null
+pip install requests > /dev/null 
 EOF
 
 if [ $? -ne 0 ]; then
@@ -69,9 +69,9 @@ for server in "${SERVERS[@]}"; do
     echo "Deploying to $server"
 
     # Copy the script to the server
-    scp -i "$SSH_KEY" "$HTTP_SCRIPT_FILE" "$USER_NAME@$server:~/"
+    scp -T -i "$SSH_KEY" "$HTTP_SCRIPT_FILE" "$USER_NAME@$server:~/"
     echo "Source code uploaded."
 
 done
 
-echo "Deployment completed."
+echo "CDN Deployment completed."
