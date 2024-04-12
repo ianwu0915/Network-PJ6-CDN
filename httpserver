@@ -237,8 +237,14 @@ class MyHandler(BaseHTTPRequestHandler):
     def do_GET(self):  
         global LFUcache
         print("Requesting for: ", self.path)
-        # if the path is in the cache, return the content
         
+         # Check if the request is for the grading beacon
+        if self.path == "/grading/beacon":
+            self.send_response(204)  # 204 No Content
+            self.end_headers()
+            return
+        
+        # if the path is in the cache, return the content
         LFUcache.checkIfOriginChanged(self.server.origin)
         response_content = LFUcache.get(self.path)
         if response_content != -1:
