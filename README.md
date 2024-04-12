@@ -1,5 +1,9 @@
 # Network-PJ6-CDN
 
+## Command to login to http server 
+ssh -i ssh-ed25519-wu.hsin.priv wu.hsin@cdn-http3.khoury.northeastern.edu
+
+
 ### ipvs addr: 
 
 cdn-http3: 45.33.55.171
