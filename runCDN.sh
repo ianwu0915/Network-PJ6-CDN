@@ -48,12 +48,12 @@ EOF
 # Define the server list to delpoy to 
 SERVERS=(
     "cdn-http3.khoury.northeastern.edu"
-    "cdn-http4.khoury.northeastern.edu"
-    "cdn-http7.khoury.northeastern.edu"
-    "cdn-http11.khoury.northeastern.edu"
-    "cdn-http14.khoury.northeastern.edu"
-    "cdn-http15.khoury.northeastern.edu"
-    "cdn-http16.khoury.northeastern.edu"
+    # "cdn-http4.khoury.northeastern.edu"
+    # "cdn-http7.khoury.northeastern.edu"
+    # "cdn-http11.khoury.northeastern.edu"
+    # "cdn-http14.khoury.northeastern.edu"
+    # "cdn-http15.khoury.northeastern.edu"
+    # "cdn-http16.khoury.northeastern.edu"
 )
 
 # Loop through each server and run the http server
@@ -61,6 +61,7 @@ for server in "${SERVERS[@]}"; do
 
     # SSH into the server, make the script executable, and run it
     ssh -T "$USER_NAME@$server" << EOF
+
     chmod +x $HTTP_SCRIPT_FILE
     echo "Start Running http Server on $server"
 

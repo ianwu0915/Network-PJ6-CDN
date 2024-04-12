@@ -1,4 +1,0 @@
-current size: 921848
-http://cs5700cdnorigin.ccs.neu.edu:8080///Michael_Jackson-> 1
-http://cs5700cdnorigin.ccs.neu.edu:8080///Taylor_Swift-> 3
-http://cs5700cdnorigin.ccs.neu.edu:8080///Los_Angeles-> 1

@@ -52,12 +52,12 @@ echo "DNS source code uploaded."
 # Define the server list to delpoy to 
 SERVERS=(
     "cdn-http3.khoury.northeastern.edu"
-    "cdn-http4.khoury.northeastern.edu"
-    "cdn-http7.khoury.northeastern.edu"
-    "cdn-http11.khoury.northeastern.edu"
-    "cdn-http14.khoury.northeastern.edu"
-    "cdn-http15.khoury.northeastern.edu"
-    "cdn-http16.khoury.northeastern.edu"
+    # "cdn-http4.khoury.northeastern.edu"
+    # "cdn-http7.khoury.northeastern.edu"
+    # "cdn-http11.khoury.northeastern.edu"
+    # "cdn-http14.khoury.northeastern.edu"
+    # "cdn-http15.khoury.northeastern.edu"
+    # "cdn-http16.khoury.northeastern.edu"
 )
 
 # Loop through each server and deploy the script

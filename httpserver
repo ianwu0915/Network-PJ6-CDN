@@ -18,7 +18,20 @@ CACHE_SIZE = 20 * 1024 * 1024
 
 hostname = "localhost"
 port = 8080
-
+ 
+'''
+This class implements a Least Frequently Used (LFU) cache.
+It has the following methods:
+- get: Get the content of a path from the cache.
+- put: Add a path and its content to the cache.
+- evict: Remove the least frequently used item from the cache.
+- get_safe_filename: Generate a filesystem-safe filename by hashing the key.
+- checkIfOriginChanged: Check if the origin hostname changed.
+- write_to_disk: Write the cache content to the disk.
+- write_frequency_Map_to_disk: Overwrite and Update the frequency map to disk.
+- read_frequency_Map_from_disk: Read the frequency map from disk.
+- updateFrequency_list: Update the frequency list.
+'''
 class LFUCache:
     def __init__(self, capacity):
         self.capacity = capacity
@@ -60,6 +73,9 @@ class LFUCache:
         # if self.origin_hostname == origin:
         #     print("Origin hostname has not changed")
         #     return 
+        
+        # Create a directory called cache
+        os.makedirs("./cache", exist_ok=True)
         
         self.origin_hostname = origin
         self.hashed_origin_hostname = self.get_safe_filename(origin)
@@ -163,17 +179,6 @@ class LFUCache:
         print("#############################")
         print("Updating frequency list")
         self.frequencyMap[key] += 1
-        
-        # for each in self.frequencyMap:
-        #     if each[0] == key:
-        #         each[1] += 1
-        #         #sort the frequency list
-        #         self.frequencyMap.sort(key=lambda x: x[1])
-        #         print("#############################")
-        #         print("Frequency list updated")
-        #         print("FrequencyMap: ", self.frequencyMap)
-        #         print("#############################")
-        
         self.write_frequency_Map_to_disk()
                     
     def evict(self):
@@ -211,13 +216,24 @@ class LFUCache:
         
 LFUcache = LFUCache(CACHE_SIZE)
 
+'''
+This class is a subclass of the HTTP server class. 
+It overrides the constructor
+to take an additional argument, origin, which
+is the origin server URL for the CDN.
+'''
 class MyHTTPServer(ThreadingMixIn, HTTPServer):
     def __init__(self, server_address, handler_class, origin):
         self.origin = origin
         super().__init__(server_address, handler_class)
-       
+        
+'''
+This class is a subclass of the Base HTTPRequestHandler class. 
+It overrides the do_GET method to handle GET requests.
+'''
 class MyHandler(BaseHTTPRequestHandler):
 
+    # handle GET requests
     def do_GET(self):  
         global LFUcache
         print("Requesting for: ", self.path)
@@ -250,7 +266,8 @@ class MyHandler(BaseHTTPRequestHandler):
         self.send_header("Content-type", "text/html")
         self.end_headers()
         self.wfile.write(response_content.encode('utf-8'))
-          
+        
+    # fetch content from the origin server if the path is not in the cache
     def fetch_from_origin_server(self, path):
         origin_url = f"{self.server.origin}{path}"
     
@@ -267,7 +284,10 @@ class MyHandler(BaseHTTPRequestHandler):
         except requests.exceptions.HTTPError as err:
             print(f"Error: {err}")
             return None 
-        
+
+
+
+# This function runs the HTTP server.       
 def run(server_class=MyHTTPServer, handler_class=MyHandler, port=8080, origin =""):
     server_address = ('', port)
     httpd = server_class(server_address, handler_class, origin)
