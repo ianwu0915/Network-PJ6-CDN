@@ -13,3 +13,5 @@ cdn-http11: 139.162.82.207
 cdn-http14: 45.79.124.209
 cdn-http15: 192.53.123.145
 cdn-http16: 192.46.221.203
+
+./deployCDN.sh -p 20260 -o http://cs5700cdnorigin.ccs.neu.edu:8080/. -n cs5700cdn.example.com. -u wu.hsin -i /Users/ianwu/Desktop/NEU/CS5700_NETWORK/ssh-ed25519-wu.hsin.priv 

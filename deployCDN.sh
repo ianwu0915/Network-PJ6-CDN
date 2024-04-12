@@ -37,17 +37,21 @@ if [[ ! -f "$HTTP_SCRIPT_FILE" ]] || [[ ! -f "$DNS_SCRIPT_FILE" ]]; then
 fi
 
 # scp dns source code to dns server
-DNSERVER="cdn-dns.khoury.northeastern.edu"
+DNS_SERVER="cdn-dns.khoury.northeastern.edu"
 
-scp -i "$SSH_KEY" "$DNS_SCRIPT_FILE" "$USER_NAME@$DNSERVER:~/"
-ssh -i "$SSH_KEY" "$USER_NAME@$DNS_SERVER" << EOF
+scp -i "$SSH_KEY" "$DNS_SCRIPT_FILE" "$USER_NAME@$DNS_SERVER:~/"
+ssh -T -i "$SSH_KEY" "$USER_NAME@$DNS_SERVER" << EOF
 pip install ip2geotools
 pip install dnslib
 pip install requests
 EOF
 
-echo "DNS source code uploaded."
+if [ $? -ne 0 ]; then
+    echo "SSH command execution failed."
+    exit 1
+fi
 
+echo "DNS source code uploaded."
 
 # Define the server list to delpoy to 
 SERVERS=(
