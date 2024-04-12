@@ -30,7 +30,7 @@ if [[ -z "$USER_NAME" ]] || [[ -z "$SSH_KEY" ]]; then
 fi
 
 # Start running DNS server 
-echo "Start Running DNS Server on $DNS_SERVER"
+echo "Stop Running DNS Server on $DNS_SERVER"
 ssh -i "$SSH_KEY" "$USER_NAME@$DNS_SERVER" > /dev/null << EOF
 lsof -ti:$PORT | xargs -r kill
 
@@ -40,12 +40,12 @@ EOF
 # Define the server list to delpoy to 
 SERVERS=(
     "cdn-http3.khoury.northeastern.edu"
-    # "cdn-http4.khoury.northeastern.edu"
-    # "cdn-http7.khoury.northeastern.edu"
-    # "cdn-http11.khoury.northeastern.edu"
-    # "cdn-http14.khoury.northeastern.edu"
-    # "cdn-http15.khoury.northeastern.edu"
-    # "cdn-http16.khoury.northeastern.edu"
+    "cdn-http4.khoury.northeastern.edu"
+    "cdn-http7.khoury.northeastern.edu"
+    "cdn-http11.khoury.northeastern.edu"
+    "cdn-http14.khoury.northeastern.edu"
+    "cdn-http15.khoury.northeastern.edu"
+    "cdn-http16.khoury.northeastern.edu"
 )
 
 # Loop through each server and run the http server
@@ -54,6 +54,7 @@ for server in "${SERVERS[@]}"; do
     # SSH into the server, make the script executable, and run it
     ssh -T -i "$SSH_KEY" "$USER_NAME@$server" > /dev/null << EOF
     lsof -ti:$PORT | xargs -r kill
+    echo "HTTP server stop running on $server."
 EOF
 done
 
