@@ -46,6 +46,7 @@ pip install dnslib > /dev/null
 pip install requests > /dev/null 
 EOF
 
+# Check if the DNS server script was uploaded successfully
 if [ $? -ne 0 ]; then
     echo "SSH command execution failed."
     exit 1

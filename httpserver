@@ -10,43 +10,57 @@ import hashlib
 import os
 import shutil
 
-# origin server to for cdn 
-# http://cs5700cdnorigin.ccs.neu.edu:8080/. 
-
 # Size limit for the cache is 20MB (20 * 1024 * 1024 bytes)
 CACHE_SIZE = 20 * 1024 * 1024
 
-hostname = "localhost"
-port = 8080
- 
-'''
-This class implements a Least Frequently Used (LFU) cache.
-It has the following methods:
-- get: Get the content of a path from the cache.
-- put: Add a path and its content to the cache.
-- evict: Remove the least frequently used item from the cache.
-- get_safe_filename: Generate a filesystem-safe filename by hashing the key.
-- checkIfOriginChanged: Check if the origin hostname changed.
-- write_to_disk: Write the cache content to the disk.
-- write_frequency_Map_to_disk: Overwrite and Update the frequency map to disk.
-- read_frequency_Map_from_disk: Read the frequency map from disk.
-- updateFrequency_list: Update the frequency list.
-'''
 class LFUCache:
+    """
+    A class representing a Least Frequently Used (LFU) cache mechanism.
+
+    Attributes:
+        capacity (int): The maximum storage capacity of the cache.
+        origin_hostname (str): The hostname of the origin server.
+        hashed_origin_hostname (str): The hashed version of the origin hostname for unique directory naming.
+        cache (dict): A dictionary to store cached data with paths as keys and filenames as values.
+        frequencyMap (dict): A dictionary to store access frequencies of cached items.
+        current_size (int): The current size of the cache used.
+    """
     def __init__(self, capacity):
+        """
+        Constructs all the necessary attributes for the LFU cache object.
+
+        Parameters:
+            capacity (int): The maximum storage capacity of the cache (in bytes).
+        """
         self.capacity = capacity
         self.origin_hostname = None
         self.hashed_origin_hostname = None
-        
-        self.cache = {} # map path to filename
-        self.frequencyMap = {} # keep an sorted array of [path, frequency]
+        self.cache = {} 
+        self.frequencyMap = {} 
         self.current_size = 0
     
     def get_safe_filename(self, path):
-        # Generate a filesystem-safe filename by hashing the key.
+        """
+        Generates a filesystem-safe filename by hashing the path.
+
+        Parameters:
+            path (str): The file path to hash.
+
+        Returns:
+            str: A hashed version of the input path.
+        """
         return hashlib.sha256(path.encode()).hexdigest()
         
     def get(self, path):
+        """
+        Retrieves the content of the given path from the cache.
+
+        Parameters:
+            path (str): The path of the file to retrieve.
+
+        Returns:
+            str: The content of the file if it is in the cache, otherwise -1.
+        """
         path = f"{self.origin_hostname}/{path}"
         if path not in self.cache:
             return -1 
@@ -63,16 +77,15 @@ class LFUCache:
                 print(f"Error reading file {filename}: {e}")
                 return -1
     
-    # check if the origin hostname changed
-    # if it changed, delete the previous origin directory in the cache
-    # and create a new origin directory
-    # Set the current origin hostname to the new origin hostname
     def checkIfOriginChanged(self, origin):
+        """
+        Checks and updates the cache directory if the origin server hostname has changed.
+
+        Parameters:
+            origin (str): The hostname of the origin server.
+        """
         print("Checking if origin changed")
         print("Current Origin Hostname: ", origin)
-        # if self.origin_hostname == origin:
-        #     print("Origin hostname has not changed")
-        #     return 
         
         # Create a directory called cache
         os.makedirs("./cache", exist_ok=True)
@@ -101,7 +114,14 @@ class LFUCache:
             self.read_frequency_Map_from_disk()
              
     def put(self, path, content):
-        
+        """
+        Adds a new path and its content to the cache. If the cache exceeds its capacity,
+        evicts the least frequently used items.
+
+        Parameters:
+            path (str): The path of the file to cache.
+            content (str): The content of the file to cache.
+        """ 
         file_path = f"{self.origin_hostname}/{path}"
         if file_path in self.cache:
             raise ValueError("Key already exists in cache")
@@ -133,10 +153,15 @@ class LFUCache:
         print("#############################")
         self.frequencyMap[file_path] = 1
         self.write_frequency_Map_to_disk()
-    
-    # Write the cache content to the disk
+
     def write_to_disk(self, hashed_file_name, content):
-        
+        """
+        Writes the compressed content to the disk.
+
+        Parameters:
+            hashed_file_name (str): The hashed file name to store the content.
+            content (str): The content to be written to the disk.
+        """
         cache_dir = f"./cache/{self.hashed_origin_hostname}"
         file_path = f"{cache_dir}/{hashed_file_name}"
         
@@ -148,8 +173,11 @@ class LFUCache:
         except OSError as e:
             print(f"Failed to write file {file_path}: {e}")
     
-    # Overwrite and Update the frequency map to disk
     def write_frequency_Map_to_disk(self):
+        '''
+        Write the frequency map to disk.
+        '''
+        
         # open the file in write mode
         # overwrite the file if it exists
         with open(f"./cache/{self.hashed_origin_hostname}/frequencyMap.txt", "w") as f:
@@ -160,6 +188,9 @@ class LFUCache:
     
     # read the frequency map from disk
     def read_frequency_Map_from_disk(self):
+        """
+        Reads the frequency map from the disk to update the cache management policies based on access frequencies.
+        """
         try:
             with open(f"./cache/{self.hashed_origin_hostname}/frequencyMap.txt", "r") as f:
                 for line in f:
@@ -174,24 +205,32 @@ class LFUCache:
         except FileNotFoundError:
             print("File not found")
     
+    
+    # Update the frequency list
     def updateFrequency_list(self, key):
+        """
+        Updates the access frequency list for a given cache item.
+
+        Parameters:
+            key (str): The cache key corresponding to the item whose frequency is to be updated.
+        """
         # find the path in the frequency list
-        print("#############################")
         print("Updating frequency list")
         self.frequencyMap[key] += 1
         self.write_frequency_Map_to_disk()
                     
     def evict(self):
-        
+        """
+        Evicts the least frequently used item from the cache based on the access frequency in the frequency map.
+        """
         if not self.frequencyMap:
             print("Cache is empty, no items to evict.")
             return
         
         print(f"Current Cache Size Used: {self.current_size / CACHE_SIZE * 100:.2f} %")
         
-        # remove the least Frequently used item from the sorted frequency hashmap
+        # Remove the least Frequently used item from the sorted frequency hashmap
         # and remove the file from the filesystem
-        
         # sort the frequency key value pair by frequency
         for path, freq in sorted(self.frequencyMap.items(), key = lambda x: x[1]):
             # check the frequency from the beginning and see if it's in the cache
@@ -216,25 +255,36 @@ class LFUCache:
         
 LFUcache = LFUCache(CACHE_SIZE)
 
-'''
-This class is a subclass of the HTTP server class. 
-It overrides the constructor
-to take an additional argument, origin, which
-is the origin server URL for the CDN.
-'''
 class MyHTTPServer(ThreadingMixIn, HTTPServer):
+    """
+    A threaded HTTP server class that handles requests in separate threads.
+
+    Attributes:
+        origin (str): The origin server URL.
+    """
     def __init__(self, server_address, handler_class, origin):
+        """
+        Initializes the HTTP server with the specified server address, handler class, and origin server URL.
+
+        Parameters:
+            server_address (tuple): The host and port to which the server is bound.
+            handler_class (BaseHTTPRequestHandler): The handler class for HTTP requests.
+            origin (str): The origin server URL.
+        """
         self.origin = origin
         super().__init__(server_address, handler_class)
-        
-'''
-This class is a subclass of the Base HTTPRequestHandler class. 
-It overrides the do_GET method to handle GET requests.
-'''
-class MyHandler(BaseHTTPRequestHandler):
 
-    # handle GET requests
+class MyHandler(BaseHTTPRequestHandler):
+    """
+    HTTP request handler class that handles GET requests.
+
+    Methods:
+        do_GET(self): Handles the GET HTTP request.
+    """
     def do_GET(self):  
+        """
+        Responds to a GET request. Loads content from the cache or fetches from the origin server if not available in the cache.
+        """
         global LFUcache
         print("Requesting for: ", self.path)
         
@@ -273,8 +323,16 @@ class MyHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(response_content.encode('utf-8'))
         
-    # fetch content from the origin server if the path is not in the cache
     def fetch_from_origin_server(self, path):
+        """
+        Fetches content from the origin server if it is not available in the cache.
+
+        Parameters:
+            path (str): The path for which content needs to be fetched.
+
+        Returns:
+            str: The content fetched from the origin server.
+        """
         origin_url = f"{self.server.origin}{path}"
     
         print("Fetching from origin server")
@@ -291,10 +349,16 @@ class MyHandler(BaseHTTPRequestHandler):
             print(f"Error: {err}")
             return None 
 
-
-
-# This function runs the HTTP server.       
 def run(server_class=MyHTTPServer, handler_class=MyHandler, port=8080, origin =""):
+    """
+    Runs the HTTP server with the specified parameters.
+
+    Parameters:
+        server_class (HTTPServer): The server class to use for running the HTTP server.
+        handler_class (BaseHTTPRequestHandler): The request handler class.
+        port (int): The port on which the server should listen.
+        origin (str): The origin server URL.
+    """
     server_address = ('', port)
     httpd = server_class(server_address, handler_class, origin)
     print(f'Starting httpd on port {port}...')
