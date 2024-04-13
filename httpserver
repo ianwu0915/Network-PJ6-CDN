@@ -334,11 +334,11 @@ class MyHandler(BaseHTTPRequestHandler):
         Handles the server load by checking the CPU and memory usage.
         """
         cpu_usage = psutil.cpu_percent(interval=1)
+        cpu_usage_json = {"cpu_usage": cpu_usage}
         
-        json_response = json.dumps(cpu_usage)
+        json_response = json.dumps(cpu_usage_json)
         
         # convert cpu_usage into json format
-        cpu_usage = {"cpu_usage": cpu_usage}
         # send the cpu usage to the monitoring server
         self.send_response(200)
         self.send_header("Content-type", "application/json")
