@@ -9,6 +9,8 @@ import argparse
 import hashlib
 import os
 import shutil
+import psutil
+import json
 
 # Size limit for the cache is 20MB (20 * 1024 * 1024 bytes)
 CACHE_SIZE = 20 * 1024 * 1024
@@ -294,6 +296,10 @@ class MyHandler(BaseHTTPRequestHandler):
             self.end_headers()
             return
         
+        if self.path == "/server-load":
+            self.handle_server_load()
+            return
+        
         # if the path is in the cache, return the content
         LFUcache.checkIfOriginChanged(self.server.origin)
         response_content = LFUcache.get(self.path)
@@ -322,6 +328,22 @@ class MyHandler(BaseHTTPRequestHandler):
         self.send_header("Content-type", "text/html")
         self.end_headers()
         self.wfile.write(response_content.encode('utf-8'))
+    
+    def handle_server_load(self):
+        """
+        Handles the server load by checking the CPU and memory usage.
+        """
+        cpu_usage = psutil.cpu_percent(interval=1)
+        
+        json_response = json.dumps(cpu_usage)
+        
+        # convert cpu_usage into json format
+        cpu_usage = {"cpu_usage": cpu_usage}
+        # send the cpu usage to the monitoring server
+        self.send_response(200)
+        self.send_header("Content-type", "application/json")
+        self.end_headers()
+        self.wfile.write(json_response.encode('utf-8'))
         
     def fetch_from_origin_server(self, path):
         """
@@ -342,9 +364,9 @@ class MyHandler(BaseHTTPRequestHandler):
             if 'gzip' in response.headers.get('Content-Encoding', ''):
                 content = gzip.decompress(response.content).decode('utf-8')
             else:
-                content = response.content.decode('utf-8')
-                
+                content = response.content.decode('utf-8')        
             return content
+        
         except requests.exceptions.HTTPError as err:
             print(f"Error: {err}")
             return None 

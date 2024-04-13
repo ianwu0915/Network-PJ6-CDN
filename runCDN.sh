@@ -58,7 +58,7 @@ SERVERS=(
 
 # Loop through each server and run the http server
 for server in "${SERVERS[@]}"; do
-
+    pip install psutil > /dev/null
     # SSH into the server, make the script executable, and run it
     ssh -T -i "$SSH_KEY" "$USER_NAME@$server" > /dev/null << EOF
 
