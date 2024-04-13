@@ -58,12 +58,11 @@ SERVERS=(
 
 # Loop through each server and run the http server
 for server in "${SERVERS[@]}"; do
-    pip install psutil > /dev/null
+    echo "Start Running HTTP Server on $server"
     # SSH into the server, make the script executable, and run it
     ssh -T -i "$SSH_KEY" "$USER_NAME@$server" > /dev/null << EOF
-
+    pip install psutil > /dev/null
     chmod +x $HTTP_SCRIPT_FILE
-    echo "Start Running http Server on $server"
 
     nohup ./httpserver -p $PORT -o $ORIGIN >httpserver.log 2>&1 &
 EOF

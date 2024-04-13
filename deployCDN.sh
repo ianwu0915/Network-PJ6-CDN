@@ -52,7 +52,7 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-echo "DNS source code uploaded."
+echo "dnsserver source code uploaded to $NAME."
 
 # Define the server list to delpoy to 
 SERVERS=(
@@ -67,7 +67,7 @@ SERVERS=(
 
 # Loop through each server and deploy the script
 for server in "${SERVERS[@]}"; do
-    echo "Deploying to $server"
+    echo " httpserver source code uploaded to $server"
 
     # Copy the script to the server
     scp -T -i "$SSH_KEY" "$HTTP_SCRIPT_FILE" "$USER_NAME@$server:~/"
