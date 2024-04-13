@@ -62,7 +62,7 @@ class MyHandler(BaseHTTPRequestHandler):
 To deploy the CDN, use the `deployCDN` script which will configure both DNS and HTTP servers on specified machines:
 
 ```bash
-./deployCDN -p port -o origin -n cs5700cdn.example.com -u username -i keyfile
+./deployCDN [-p port] [-o origin] [-n name] [-u username] [-i keyfile]
 ```
 
 #### Running the Servers
@@ -70,7 +70,7 @@ To deploy the CDN, use the `deployCDN` script which will configure both DNS and 
 After deployment, use the `runCDN` script to start the servers:
 
 ```bash
-./runCDN -p port -o origin -n cs5700cdn.example.com -u username -i keyfile
+./runCDN [-p port] [-o origin] [-n name] [-u username] [-i keyfile]
 ```
 
 #### Stopping the Servers
@@ -78,7 +78,7 @@ After deployment, use the `runCDN` script to start the servers:
 To stop all components of the CDN, use the `stopCDN` script:
 
 ```bash
-./stopCDN -p port -u username -i keyfile
+./stopCDN [-p port][-u username] [-i keyfile]
 ```
 
 ### Conclusion
