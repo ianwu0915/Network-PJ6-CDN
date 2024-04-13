@@ -31,7 +31,7 @@ fi
 
 # Start running DNS server 
 echo "Stop Running DNS Server on $DNS_SERVER"
-ssh -i "$SSH_KEY" "$USER_NAME@$DNS_SERVER" > /dev/null << EOF
+ssh -T -i "$SSH_KEY" "$USER_NAME@$DNS_SERVER" > /dev/null << EOF
 lsof -ti:$PORT | xargs -r kill
 
 echo "DNS server stop running."
