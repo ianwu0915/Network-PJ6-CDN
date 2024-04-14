@@ -37,14 +37,6 @@ if [[ ! -f "$HTTP_SCRIPT_FILE" ]] || [[ ! -f "$DNS_SCRIPT_FILE" ]]; then
     exit 1
 fi
 
-# Start running DNS server 
-echo "Start Running DNS Server on $DNS_SERVER"
-ssh -T -i "$SSH_KEY" "$USER_NAME@$DNS_SERVER" > /dev/null << EOF
-chmod +x $DNS_SCRIPT_FILE
-nohup ./dnsserver -p $PORT -n $NAME >dnsserver.log 2>&1 &
-echo "DNS server start running."
-EOF
-
 # Define the server list to delpoy to 
 SERVERS=(
     "cdn-http3.khoury.northeastern.edu"
@@ -67,5 +59,13 @@ for server in "${SERVERS[@]}"; do
     nohup ./httpserver -p $PORT -o $ORIGIN >httpserver.log 2>&1 &
 EOF
 done
+
+# Start running DNS server 
+echo "Start Running DNS Server on $DNS_SERVER"
+ssh -T -i "$SSH_KEY" "$USER_NAME@$DNS_SERVER" > /dev/null << EOF
+chmod +x $DNS_SCRIPT_FILE
+nohup ./dnsserver -p $PORT -n $NAME >dnsserver.log 2>&1 &
+echo "DNS server start running."
+EOF
 
 echo "CDN start running"

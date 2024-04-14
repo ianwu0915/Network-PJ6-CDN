@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 import argparse
+import math
+import select
+import time
 import gzip
 import os
 import socket
@@ -8,7 +11,6 @@ import json
 import requests
 import atexit
 from dnslib import DNSRecord, DNSHeader, RR, A
-from ip2geotools.errors import LimitExceededError
 import threading
 
 COUNT_UPPER = 10
@@ -19,6 +21,7 @@ IP_API_URL = "http://ip-api.com/json/{}"
 locations = """[
     {
         "ip_address": "45.33.55.171",
+        "name": "cdn-http3.khoury.northeastern.edu",
         "city": "Fremont",
         "region": "California",
         "country": "US",
@@ -27,6 +30,7 @@ locations = """[
     },
     {
         "ip_address": "170.187.142.220",
+        "name": "cdn-http4.khoury.northeastern.edu",
         "city": "Atlanta",
         "region": "Georgia",
         "country": "US",
@@ -35,6 +39,7 @@ locations = """[
     },
     {
         "ip_address": "213.168.249.157",
+        "name": "cdn-http7.khoury.northeastern.edu",
         "city": "London",
         "region": "England",
         "country": "GB",
@@ -43,6 +48,7 @@ locations = """[
     },
     {
         "ip_address": "139.162.82.207",
+        "name": "cdn-http11.khoury.northeastern.edu",
         "city": "Shibuya",
         "region": "Tokyo",
         "country": "JP",
@@ -51,6 +57,7 @@ locations = """[
     },
     {
         "ip_address": "45.79.124.209",
+        "name": "cdn-http14.khoury.northeastern.edu",
         "city": "Mumbai",
         "region": "Maharashtra",
         "country": "IN",
@@ -59,6 +66,7 @@ locations = """[
     },
     {
         "ip_address": "192.53.123.145",
+        "name": "cdn-http15.khoury.northeastern.edu",
         "city": "Toronto",
         "region": "Ontario",
         "country": "CA",
@@ -67,6 +75,7 @@ locations = """[
     },
     {
         "ip_address": "192.46.221.203",
+        "name": "cdn-http16.khoury.northeastern.edu",
         "city": "Sydney",
         "region": "New South Wales",
         "country": "AU",
@@ -77,9 +86,35 @@ locations = """[
 """
 
 
-class Location:
-    def __init__(self, ip, latitude, longitude, load=0):
+def haversine(lat1, lon1, lat2, lon2):
+    # Radius of the Earth in km
+    R = 6371.0
+
+    # coordinates in radians
+    lat1_rad = math.radians(lat1)
+    lon1_rad = math.radians(lon1)
+    lat2_rad = math.radians(lat2)
+    lon2_rad = math.radians(lon2)
+
+    # differences
+    delta_lat = lat2_rad - lat1_rad
+    delta_lon = lon2_rad - lon1_rad
+
+    # haversine formula
+    a = (
+        math.sin(delta_lat / 2) ** 2
+        + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(delta_lon / 2) ** 2
+    )
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+    distance = R * c
+    return distance
+
+
+class Server:
+    def __init__(self, ip, name, latitude, longitude, load=1):
         self.ip_address = ip
+        self.name = name
         self.latitude = latitude
         self.longitude = longitude
         self.load = load
@@ -87,15 +122,15 @@ class Location:
 
 class Dns_server:
     def __init__(self, port, name):
+        self.port = port
         self.cache_file = "dns_cache.json"
         self.cache = {}
-        self.last_location = -1
-        self.count = 0
+        self.upper_limit = 80.0
         self.load_cache()
         atexit.register(self.write_to_file)
         self.index = 0
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.socket.bind(("", port))
+        self.socket.bind(("", self.port))
         if not name.endswith("."):
             name += "."
         self.name = name
@@ -103,8 +138,9 @@ class Dns_server:
         value = json.loads(locations)
 
         for entry in value:
-            x = Location(
+            x = Server(
                 entry["ip_address"],
+                entry["name"],
                 entry["latitude"],
                 entry["longitude"],
             )
@@ -120,9 +156,25 @@ class Dns_server:
                 self.cache = json.load(f)
             print(self.cache)
 
+    def update_server_loads(self):
+        print("update the load from the server!!")
+        # Spawn a thread for each server to update its load concurrently
+        threads = []
+        for server in self.servers:
+            thread = threading.Thread(target=self.check_server_load, args=(server,))
+            threads.append(thread)
+            thread.start()
+
+        # Wait for all threads to finish
+        for thread in threads:
+            thread.join()
+
+        for each in self.servers:
+            print(f"servername: {each.name} load: {each.load}")
+
     def get_location_from_ip(self, ip):
         try:
-            response = requests.get(IP2LOCATION_API_URL.format(ip))
+            response = requests.get(IP_API_URL.format(ip))
             if response.status_code == 200:
                 data = response.json()
                 latitude = None
@@ -137,14 +189,12 @@ class Dns_server:
                 self.cache[ip] = (latitude, longitude)
                 return (latitude, longitude)
             else:
-                sys.stderr.write(
+                print(
                     f"Failed to retrieve location for IP {ip}. Status code: {response.status_code}\n"
                 )
                 return None
         except Exception as e:
-            sys.stderr.write(
-                f"An error occurred while fetching location for IP {ip}: {e}\n"
-            )
+            print(f"An error occurred while fetching location for IP {ip}: {e}\n")
             return None
 
     def get_closest_location(self, client_ip):
@@ -154,35 +204,40 @@ class Dns_server:
             print("get from cache")
             print(client_location)
         else:
-            try:
-                client_location = self.get_location_from_ip(client_ip)
-                print(f"get from lookup api {client_location}")
-            except LimitExceededError:
-                sys.stderr.write(f"No more try to look up the location {client_ip}\n")
-                return None
+            client_location = self.get_location_from_ip(client_ip)
+            print(f"get from lookup api {client_location}")
         if client_location is None:
+            print("The look failed return none!")
             return None
         for i in range(len(self.servers)):
-            distance_lat = abs(client_location[0] - self.servers[i].latitude)
-            distance_lon = abs(client_location[1] - self.servers[i].longitude)
-            distance = distance_lat + distance_lon  # Sum of absolute differences
+            distance = haversine(
+                self.servers[i].latitude,
+                self.servers[i].longitude,
+                client_location[0],
+                client_location[1],
+            )
             new_entry = (distance, i)
             temp.append(new_entry)
         temp = sorted(temp, key=lambda x: x[0])
-        print(temp)
         for each in temp:
-            if self.servers[each[1]].load <= 0.8:
-                print(f"the location is index of {each[1]}")
-                if self.last_location == each[1]:
-                    self.count += 1
-                if self.count > COUNT_UPPER:
-                    self.count = 0
-                    continue
-                self.last_location = each[1]
-                return self.servers[each[1]]
+            if self.servers[each[1]].load > self.upper_limit:
+                print(
+                    f"the server from {self.servers[each[1]].name} is overload! switch to next!"
+                )
+                continue
+            return self.servers[each[1]]
 
-        sys.stderr.write(f"Failed to retrieve client location for IP {client_ip}\n")
+        print("cannot find the closest server")
         return None
+
+    def check_server_load(self, server):
+        response = requests.get(f"http://{server.name}:{self.port}/server-load")
+        if response.status_code == 200:
+            response = response.json()
+            server.load = response.get("cpu_usage")
+        else:
+            print(f"cannot get the server load of {server.name}")
+            server.load = 0
 
     def check_index_range(self):
         if self.index >= len(self.servers):
@@ -194,13 +249,12 @@ class Dns_server:
         request = DNSRecord.parse(data)
         qname = str(request.q.qname)
         qtype = request.q.qtype
-        print(f"Qname: {qname}\nGet request: {request}")
         if (
             qname == self.name and qtype == 1
         ):  # Check if it's an A query for the specified name
             closest = self.get_closest_location(addr[0])
             if not closest:
-                print("fail to look up geo location of ip!")
+                print("fail to look up geo location of ip! using the default index")
                 self.check_index_range()
                 closest = self.servers[self.index]
                 self.index += 1
@@ -212,9 +266,34 @@ class Dns_server:
 
     def run(self):
         print("DNS Server is running...")
+        # Set the socket to non-blocking mode
+        self.socket.setblocking(False)
+
+        # Create a list to hold the server socket
+        sockets = [self.socket]
+
+        def periodic_update():
+            while True:
+                self.update_server_loads()
+                time.sleep(3)
+
+        # Start a separate thread for the periodic update
+        update_thread = threading.Thread(target=periodic_update)
+        update_thread.daemon = (
+            True  # Set as daemon so it will exit when the main thread exits
+        )
+        update_thread.start()
         while True:
-            data, addr = self.socket.recvfrom(1024)
-            threading.Thread(target=self.handle_request, args=(data, addr)).start()
+
+            readable, _, _ = select.select(sockets, [], [])
+
+            for sock in readable:
+                if sock == self.socket:
+                    # Accept incoming connection
+                    data, addr = sock.recvfrom(1024)
+                    threading.Thread(
+                        target=self.handle_request, args=(data, addr)
+                    ).start()
 
 
 def main():
@@ -225,6 +304,7 @@ def main():
         default="cs5700cdn.example.com.",
         type=str,
         help="CDN-specific name",
+        required=True,
     )
     parser.add_argument(
         "-p",
@@ -232,8 +312,10 @@ def main():
         type=int,
         default=20210,
         help="Port number for the DNS server",
+        required=True,
     )
     args = parser.parse_args()
+    time.sleep(5)
 
     dns_server = Dns_server(args.port, args.name)
     dns_server.run()
