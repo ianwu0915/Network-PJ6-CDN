@@ -123,6 +123,7 @@ class Server:
     """
     The server class that represent each server location DNS know about
     """
+
     def __init__(self, ip, name, latitude, longitude, load=-1):
         """
         The inital fucntion for the server class
@@ -143,6 +144,7 @@ class Dns_server:
     """
     The DNS server class that answer the query
     """
+
     def __init__(self, port, name):
         """
         The inital function for the dns server class
@@ -150,7 +152,7 @@ class Dns_server:
         :param name: The name of the question dns with translate into ip
         """
         self.port = port
-        self.cache_file = "dns_cache.json"
+        self.cache_file = "cache.gz"
         self.cache = {}
         self.upper_limit = 80.0
         self.load_cache()
@@ -178,6 +180,7 @@ class Dns_server:
         Write out the cache to file
         :return: None
         """
+        print("write the cache to file!")
         with gzip.open("cache.gz", "wt") as f:
             json.dump(self.cache, f)
 
@@ -190,8 +193,9 @@ class Dns_server:
             if self.cache_file.endswith(".gz"):
                 with gzip.open(self.cache_file, "rt") as f:
                     self.cache = json.load(f)
-            with open(self.cache_file, "r") as f:
-                self.cache = json.load(f)
+            else:
+                with open(self.cache_file, "r") as f:
+                    self.cache = json.load(f)
             print(self.cache)
 
     def update_server_loads(self):
@@ -234,8 +238,10 @@ class Dns_server:
                     if latitude and longitude:
                         break
                 self.cache[ip] = (latitude, longitude)
+                self.write_to_file()
                 return (latitude, longitude)
             else:
+                print("using back up look up ip api")
                 response = requests.get(IP_API_URL.format(ip))
                 if response.status_code == 200:
                     data = response.json()
@@ -249,6 +255,7 @@ class Dns_server:
                         if latitude and longitude:
                             break
                     self.cache[ip] = (latitude, longitude)
+                    self.write_to_file()
                     return (latitude, longitude)
                 else:
                     print("back up look up fail")
@@ -286,7 +293,10 @@ class Dns_server:
         temp = sorted(temp, key=lambda x: x[0])
         for each in temp:
             index = each[1]
-            if self.servers[index].load > self.upper_limit or self.servers[index].load < 0:
+            if (
+                self.servers[index].load > self.upper_limit
+                or self.servers[index].load < 0
+            ):
                 print(
                     f"the server from {self.servers[each[1]].name} is overload! switch to next!"
                 )
@@ -406,7 +416,12 @@ def main():
     args = parser.parse_args()
 
     dns_server = Dns_server(args.port, args.name)
-    dns_server.run()
+    try:
+        dns_server.run()
+    finally:
+        # Ensure that the cache is written to file before exiting
+        dns_server.write_to_file()
+        print("DNS server stopped and cache written to file.")
 
 
 if __name__ == "__main__":
