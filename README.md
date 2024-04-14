@@ -1,17 +1,19 @@
-## Content Delivery Network (CDN) Implementation
+# Content Delivery Network (CDN) Implementation
 
 This document outlines the implementation of a simple Content Delivery Network (CDN) using custom DNS and HTTP servers written in Python. The CDN is designed to optimize the delivery of web content by reducing latency, improving security, and increasing redundancy.
-
-### High-Level Approach
+## Group Work
+- **Han Chen:** Mainly develop the implementation of the DNS server
+- **Hsin-Yen Wu:** Mainly develop the implementation of the http server
+## High-Level Approach
 
 The CDN system consists of two main components:
 
 1. **DNS Server**: Directs users to the closest CDN edge server based on their geographic location to reduce latency.
 2. **HTTP Server**: Hosts the content and implements caching strategies to improve load times and reduce requests to the origin server.
 
-### DNS Server Implementation
+## DNS Server Implementation
 
-The DNS server is implemented using Python's `socket` and `dnslib` libraries. It handles DNS queries and directs them to the closest edge server using a simple geolocation-based algorithm. The server locations are predefined, and their latitude and longitude are used to calculate the distance to the client's IP address.
+The DNS server is implemented using Python's `socket`, `requests`, `dnslib` libraries. It handles DNS queries and directs them to the closest edge server using a simple geolocation-based algorithm. The server locations are predefined, and their latitude and longitude are used to calculate the distance to the client's IP address.
 
 **Key Features:**
 
@@ -23,16 +25,25 @@ The DNS server is implemented using Python's `socket` and `dnslib` libraries. It
 
 - **API Rate Limits**: The free tier of IP2Location API has rate limits that required handling of exceptions and implementing caching to minimize lookups.
 - **Error Handling**: Various network errors and API response issues needed robust exception handling to ensure server stability.
-
+- **Update the server load of each http server**: Adding check of the server load need to use a separate thread to update within the given time interval. Also using multithreading will enable the dns server can handle dns query when getting load of the server
+- **Distance calculating**: At first using the absolution difference of latitude and longitude will not give the correct result. Then switching to calculate the real difference with the haversine formula will yield to correct result. 
 ```python
+def haversine(lat1, lon1, lat2, lon2):
+    pass
 # Simplified DNS Server Example
 class Dns_server:
     def get_closest_location(self, client_ip):
         # This method finds the closest server by calculating geographic distance
         pass
+    
+    def run(self):
+        def periodic_update():
+            while True:
+                self.update_server_loads()
+                time.sleep(3)
 ```
 
-### HTTP Server Implementation
+## HTTP Server Implementation
 
 The HTTP server is implemented using Python's `http.server` and `socketserver` modules. It serves content from the CDN's edge servers, implementing an LFU (Least Frequently Used) cache to optimize content delivery.
 
@@ -55,9 +66,9 @@ class MyHandler(BaseHTTPRequestHandler):
         pass
 ```
 
-### Setup and Running
+## Setup and Running
 
-#### Deployment
+### Deployment
 
 To deploy the CDN, use the `deployCDN` script which will configure both DNS and HTTP servers on specified machines:
 
@@ -65,7 +76,7 @@ To deploy the CDN, use the `deployCDN` script which will configure both DNS and 
 ./deployCDN [-p port] [-o origin] [-n name] [-u username] [-i keyfile]
 ```
 
-#### Running the Servers
+### Running the Servers
 
 After deployment, use the `runCDN` script to start the servers:
 
@@ -73,7 +84,7 @@ After deployment, use the `runCDN` script to start the servers:
 ./runCDN [-p port] [-o origin] [-n name] [-u username] [-i keyfile]
 ```
 
-#### Stopping the Servers
+### Stopping the Servers
 
 To stop all components of the CDN, use the `stopCDN` script:
 
@@ -81,6 +92,6 @@ To stop all components of the CDN, use the `stopCDN` script:
 ./stopCDN [-p port][-u username] [-i keyfile]
 ```
 
-### Conclusion
+## Conclusion
 
 This CDN implementation leverages basic DNS redirection and HTTP caching techniques to demonstrate the core functionalities of a CDN. The project faced challenges mainly related to network programming and caching strategies, which were addressed using Python's robust libraries and careful exception handling.

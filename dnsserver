@@ -6,7 +6,6 @@ import time
 import gzip
 import os
 import socket
-import sys
 import json
 import requests
 import atexit
@@ -87,6 +86,15 @@ locations = """[
 
 
 def haversine(lat1, lon1, lat2, lon2):
+    """
+    This function is to calculate the distance between two given
+    location of latitude and longitude
+    :param lat1: latitude of the first location
+    :param lon1: longitude of the first location
+    :param lat2: latitude of the second location
+    :param lon2: longitude of the second location
+    :return: The distance between two location
+    """
     # Radius of the Earth in km
     R = 6371.0
 
@@ -112,7 +120,18 @@ def haversine(lat1, lon1, lat2, lon2):
 
 
 class Server:
-    def __init__(self, ip, name, latitude, longitude, load=1):
+    """
+    The server class that represent each server location DNS know about
+    """
+    def __init__(self, ip, name, latitude, longitude, load=-1):
+        """
+        The inital fucntion for the server class
+        :param ip: address of the http server
+        :param name: of the server
+        :param latitude: of the server
+        :param longitude: of the server
+        :param load: the server cpu load
+        """
         self.ip_address = ip
         self.name = name
         self.latitude = latitude
@@ -121,7 +140,15 @@ class Server:
 
 
 class Dns_server:
+    """
+    The DNS server class that answer the query
+    """
     def __init__(self, port, name):
+        """
+        The inital function for the dns server class
+        :param port: The port number the dns server will receive the query
+        :param name: The name of the question dns with translate into ip
+        """
         self.port = port
         self.cache_file = "dns_cache.json"
         self.cache = {}
@@ -147,16 +174,31 @@ class Dns_server:
             self.servers.append(x)
 
     def write_to_file(self):
-        with open(self.cache_file, "w") as f:
+        """
+        Write out the cache to file
+        :return: None
+        """
+        with gzip.open("cache.gz", "wt") as f:
             json.dump(self.cache, f)
 
     def load_cache(self):
+        """
+        Load the save cache file to the cache
+        :return: None
+        """
         if os.path.exists(self.cache_file):
+            if self.cache_file.endswith(".gz"):
+                with gzip.open(self.cache_file, "rt") as f:
+                    self.cache = json.load(f)
             with open(self.cache_file, "r") as f:
                 self.cache = json.load(f)
             print(self.cache)
 
     def update_server_loads(self):
+        """
+        Update the server load inside the self.servers list
+        :return: None
+        """
         print("update the load from the server!!")
         # Spawn a thread for each server to update its load concurrently
         threads = []
@@ -173,8 +215,13 @@ class Dns_server:
             print(f"servername: {each.name} load: {each.load}")
 
     def get_location_from_ip(self, ip):
+        """
+        Get the geolocation of the given ip
+        :param ip: Ip to look up
+        :return: The tuple of latitude and longitude
+        """
         try:
-            response = requests.get(IP_API_URL.format(ip))
+            response = requests.get(IP2LOCATION_API_URL.format(ip))
             if response.status_code == 200:
                 data = response.json()
                 latitude = None
@@ -189,15 +236,33 @@ class Dns_server:
                 self.cache[ip] = (latitude, longitude)
                 return (latitude, longitude)
             else:
-                print(
-                    f"Failed to retrieve location for IP {ip}. Status code: {response.status_code}\n"
-                )
-                return None
+                response = requests.get(IP_API_URL.format(ip))
+                if response.status_code == 200:
+                    data = response.json()
+                    latitude = None
+                    longitude = None
+                    for key, value in data.items():
+                        if key.startswith("lat"):
+                            latitude = value
+                        elif key.startswith("lon"):
+                            longitude = value
+                        if latitude and longitude:
+                            break
+                    self.cache[ip] = (latitude, longitude)
+                    return (latitude, longitude)
+                else:
+                    print("back up look up fail")
+                    return None
         except Exception as e:
             print(f"An error occurred while fetching location for IP {ip}: {e}\n")
             return None
 
     def get_closest_location(self, client_ip):
+        """
+        Get the closest location of the client ip in the servers list
+        :param client_ip: client ip
+        :return: The closest server object
+        """
         temp = []
         if client_ip in self.cache:
             client_location = self.cache.get(client_ip)
@@ -220,32 +285,48 @@ class Dns_server:
             temp.append(new_entry)
         temp = sorted(temp, key=lambda x: x[0])
         for each in temp:
-            if self.servers[each[1]].load > self.upper_limit:
+            index = each[1]
+            if self.servers[index].load > self.upper_limit or self.servers[index].load < 0:
                 print(
                     f"the server from {self.servers[each[1]].name} is overload! switch to next!"
                 )
                 continue
-            return self.servers[each[1]]
+            return self.servers[index]
 
         print("cannot find the closest server")
         return None
 
     def check_server_load(self, server):
+        """
+        The function that will check the single server load
+        :param server: The server to check the load
+        :return: None
+        """
         response = requests.get(f"http://{server.name}:{self.port}/server-load")
         if response.status_code == 200:
             response = response.json()
             server.load = response.get("cpu_usage")
         else:
             print(f"cannot get the server load of {server.name}")
-            server.load = 0
+            server.load = -1
 
     def check_index_range(self):
+        """
+        Check if the index is out of range.
+        :return: None
+        """
         if self.index >= len(self.servers):
             self.index = 0
         if self.index < 0:
             self.index = 0
 
     def handle_request(self, data, addr):
+        """
+        The function to handle the dns query
+        :param data: The data of the dns query
+        :param addr: The ip address of the request source.
+        :return: None
+        """
         request = DNSRecord.parse(data)
         qname = str(request.q.qname)
         qtype = request.q.qtype
@@ -265,6 +346,10 @@ class Dns_server:
             self.socket.sendto(response.pack(), addr)
 
     def run(self):
+        """
+        Running function of the dns server
+        :return: None
+        """
         print("DNS Server is running...")
         # Set the socket to non-blocking mode
         self.socket.setblocking(False)
@@ -297,6 +382,10 @@ class Dns_server:
 
 
 def main():
+    """
+    Main function of the program
+    :return: None
+    """
     parser = argparse.ArgumentParser(description="DNS Server")
     parser.add_argument(
         "-n",
@@ -315,7 +404,6 @@ def main():
         required=True,
     )
     args = parser.parse_args()
-    time.sleep(5)
 
     dns_server = Dns_server(args.port, args.name)
     dns_server.run()
