@@ -290,7 +290,7 @@ class MyHandler(BaseHTTPRequestHandler):
         response_content = LFUcache.get(self.path)
         if response_content != -1:
             # response_content = LFUcache.get(self.path)
-            # print("######## Cache Hit!!!! ########")
+            print("######## Cache Hit!!!! ########")
             
         # if the path is not in the cache, fetch from origin server
         else:
