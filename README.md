@@ -3,7 +3,7 @@
 This document outlines the implementation of a simple Content Delivery Network (CDN) using custom DNS and HTTP servers written in Python. The CDN is designed to optimize the delivery of web content by reducing latency, improving security, and increasing redundancy.
 ## Group Work
 - **Han Chen:** Mainly develop the implementation of the DNS server
-- **Hsin-Yen Wu:** Mainly develop the implementation of the http server
+- **HsinYen Wu:** Mainly develop the implementation of the http server
 ## High-Level Approach
 
 The CDN system consists of two main components:
