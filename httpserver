@@ -63,7 +63,7 @@ class LFUCache:
         Returns:
             str: The content of the file if it is in the cache, otherwise -1.
         """
-        path = f"{self.origin_hostname}/{path}"
+        # path = f"{self.origin_hostname}{path}"
         if path not in self.cache:
             print(f"Path: {path} not in cache")
             return -1 
@@ -129,36 +129,27 @@ class LFUCache:
             path (str): The path of the file to cache.
             content (str): The content of the file to cache.
         """ 
-        file_path = f"{self.origin_hostname}/{path}"
-        if file_path in self.cache:
+        # file_path = f"{self.origin_hostname}{path}"
+        if path in self.cache:
             raise ValueError("Key already exists in cache")
         
-        file_size = sys.getsizeof(file_path) + sys.getsizeof(gzip.compress(content.encode('utf-8')))
+        file_size = sys.getsizeof(path) + sys.getsizeof(gzip.compress(content.encode('utf-8')))
         
         while self.cache and self.current_size + file_size > self.capacity:
-            print("#############################")
-            print("Cache is full, Evicting the least frequently used item")
-            print("file size: ", file_size)
-            print("Current size + file size: ", self.current_size + file_size)
-            print("Cache size: ", self.capacity)
-            print("#############################")
             self.evict()
         
         # [path: hashed_filename]
-        hashed_file_name = self.get_safe_filename(file_path)
+        hashed_file_name = self.get_safe_filename(path)
         
-        self.cache[file_path] = hashed_file_name
-        print("Add to cache: ", file_path, hashed_file_name)
+        self.cache[path] = hashed_file_name
+        print("Add to cache: ", hashed_file_name)
         print("Cache: ", self.cache)
         self.write_to_disk(hashed_file_name, content)
         
         # update the current size with real file size
-        file_size = os.path.getsize(f"./cache/{self.hashed_origin_hostname}/{self.cache[file_path]}")
+        file_size = os.path.getsize(f"./cache/{self.hashed_origin_hostname}/{self.cache[path]}")
         self.current_size += file_size
-        print("#############################")
-        print(f"Current Cache Size Used: {self.current_size / CACHE_SIZE * 100:.2f} %")
-        print("#############################")
-        self.frequencyMap[file_path] = 1
+        self.frequencyMap[path] = 1
         self.write_frequency_Map_to_disk()
 
     def write_to_disk(self, hashed_file_name, content):
@@ -238,8 +229,6 @@ class LFUCache:
         if not self.frequencyMap:
             print("Cache is empty, no items to evict.")
             return
-        
-        print(f"Current Cache Size Used: {self.current_size / CACHE_SIZE * 100:.2f} %")
         
         # Remove the least Frequently used item from the sorted frequency hashmap
         # and remove the file from the filesystem
@@ -330,8 +319,6 @@ class MyHandler(BaseHTTPRequestHandler):
                 return
            
             LFUcache.put(self.path, response_content)
-            print("Add to cache successful")
-            print("Current Cache Size: ", LFUcache.current_size)
         
         print("GET request received")
         self.send_response(200)
@@ -402,12 +389,11 @@ if __name__ == "__main__":
     parser.add_argument('-o', '--origin', type=str, help='Origin server URL for the CDN', required=True)
 
     args = parser.parse_args()
+    if args.origin.endswith("/"):
+        args.origin = args.origin[:-1]
     
-    if arg.origin.endswith("/"):
-        arg.origin = arg.origin[:-1]
-    
-    elif arg.origin.endswith("/."):
-        arg.origin = arg.origin[:-2]
-    
+    elif args.origin.endswith("/."):
+        args.origin = args.origin[:-2]
+
     run(port=args.port, origin=args.origin)
                                     
