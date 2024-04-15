@@ -65,6 +65,7 @@ class LFUCache:
         """
         path = f"{self.origin_hostname}/{path}"
         if path not in self.cache:
+            print(f"Path: {path} not in cache")
             return -1 
         else:
             filename = self.cache[path]
@@ -86,6 +87,10 @@ class LFUCache:
         Parameters:
             origin (str): The hostname of the origin server.
         """
+        
+        if self.origin_hostname == origin:
+            return
+        
         print("Checking if origin changed")
         print("Current Origin Hostname: ", origin)
         
@@ -140,7 +145,7 @@ class LFUCache:
             self.evict()
         
         # [path: hashed_filename]
-        hashed_file_name = self.get_safe_filename(path)
+        hashed_file_name = self.get_safe_filename(file_path)
         
         self.cache[file_path] = hashed_file_name
         print("Add to cache: ", file_path, hashed_file_name)
@@ -203,7 +208,12 @@ class LFUCache:
                     path, frequency = line.split("->")
                     print("Path: ", path)
                     self.frequencyMap[path] = int(frequency)
+                    
+                    if path not in self.cache:
+                        self.cache[path] = self.get_safe_filename(path)
+                    
                 print("FrequencyMap: ", self.frequencyMap)
+                print("Cache: ", self.cache)
         except FileNotFoundError:
             print("File not found")
     
